@@ -40,39 +40,38 @@ INFOCHAR      = dict(zip("playing done new".split(),">x "))
 # TODO: proper parsing etc.
 def main(*args):                                                # {{{1
   if not args:
-    print("Usage: m { list | next | play <file> | mark <file> }")
+    print("Usage: m { list | next | play <file> | [un]mark <file> }")
     return 1
   f = DISPATCH.get(args[0])
   if not f:
-    print("Unknown command:", " ".join(args))
-    return 1
+    print("Unknown command:", " ".join(args)); return 1
   do_something(f, args = args[1:])
   return 0
                                                                 # }}}1
 
-def do_list_dir(d, db):                                         # {{{1
+def do_list_dir(d, db):
   for i, f, t in dir_iter(d, db):
     o = ["["+INFOCHAR(i)+"]", f]
     if t: o.append(format_time(t))
     print(*o)
-                                                                # }}}1
 
-def do_play_next(d, db):                                        # {{{1
+def do_play_next(d, db):
   f, t = dir_next(d, db)
   if not f:
-    print("No files to play.")
-    return
-  print("Playing", f, "...")
-  if t: print("  from", format_time(t))
-  t_ = vlc_play(f, t)
-  db_update(d, { f : t_ or True })
-                                                                # }}}1
+    print("No files to play."); return
+  play_file(db, f, t)
 
 def do_play_file(d, db, filename):
-  ...
+  filename = check_filename(filename, d)
+  play_file(db, filename)
 
 def do_mark_file(d, db, filename):
-  ...
+  filename = check_filename(filename, d)
+  db_update(d, { filename : True })
+
+def do_unmark_file(d, db, filename):
+  filename = check_filename(filename, d)
+  db_update(d, { filename : False })
 
 def dir_iter(d, db):                                            # {{{1
   for f in dir_files(d):
@@ -101,7 +100,8 @@ def db_load(dirname):
 
 def db_update(dirname, files):                                  # {{{1
   CFG.mkdir(exist_ok = True)
-  fs  = db_load(dirname); fs.update(files)
+  fs  = { k:v for k,v in {**db_load(dirname), **files}.items()
+          if v != False }
   dat = dict(dir = str(dirname), files = fs)
   with db_dir_file(dirname).open("w") as f:
     json.dump(dat, f, indent = 2, sort_keys = True)
@@ -113,6 +113,21 @@ def db_dir_file(dirname):
   x = "dir__" + d.replace("/", "|") + "__" + \
       hashlib.sha1(d.encode()).hexdigest() + ".json"
   return CFG / x
+
+# TODO
+def check_filename(filename, d):                                # {{{1
+  p = (d / Path(filename)).relative_to(d)
+  if not p.is_file(): raise ValueError("'{}' is not a file".format(p))
+  if len(p.parts) != 1:
+    raise ValueError("'{}' is not a file in '{}'".format(p, d))
+  return str(p)
+                                                                # }}}1
+
+def play_file(db, filename, t = None):
+  print("Playing", f, "...")
+  if t: print("  from", format_time(t))
+  t_ = vlc_play(f, t, db)
+  db_update(d, { f : t_ or True })
 
 # TODO: error handling?
 def vlc_play(filename, t = None):
@@ -139,9 +154,7 @@ def vlc_get_times():                                            # {{{1
                                                                 # }}}1
 
 def format_time(secs):
-  s = secs % 60
-  m = secs // 60 % 60
-  h = secs // 60 // 60
+  s = secs % 60; m = secs // 60 % 60; h = secs // 60 // 60
   return "{:02d}:{:02d}:{:02d}".format(h,m,s)
 
 def do_something(f, args = (), d = None):
@@ -149,11 +162,9 @@ def do_something(f, args = (), d = None):
   return f(d, db_load(d), *args)
 
 # TODO
-DISPATCH = (
-  list = do_list_dir,
-  next = do_play_next,
-  play = do_play_file,
-  mark = do_mark_file,
+DISPATCH = dict(
+  list = do_list_dir, next = do_play_next, play = do_play_file,
+  mark = do_mark_file, unmark = do_unmark_file
 )
 
 if __name__ == "__main__":
