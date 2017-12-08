@@ -253,7 +253,7 @@ def play_file(d, fs, f):
 # need to prompt :(
 def vlc_play(d, f, t = None):                                   # {{{1
   t_  = max(0, t - CONT_BACK) if t else 0
-  cmd = VLCCMD + (VLCCONT(t_) if t_ else []) + ["--", d / f]
+  cmd = VLCCMD + (VLCCONT(t_) if t_ else []) + ["--", str(d / f)]
   print("RUN", *cmd); subprocess.run(cmd, check = True)
   t2  = vlc_get_times().get(str(d / f)) or True
   return False if t2 == True and not prompt_yn("Done") else t2
