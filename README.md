@@ -5,7 +5,7 @@
     Date        : 2017-12-08
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
-    Version     : v0.0.2
+    Version     : v0.1.0
 
 <!-- }}}1 -->
 
