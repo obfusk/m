@@ -135,7 +135,7 @@ def dir_files(dirname):
 #   * int (-1)  (skip)
 def db_load(dirname):
   d = db_dir_file(dirname)
-  if not d.exists(): return {}
+  if not d.exists(): return dict(dir = str(dirname), files = {})
   with d.open() as f: return _db_check(dirname, json.load(f))
 
 # TODO: use flock? backup?
