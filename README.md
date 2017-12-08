@@ -48,6 +48,7 @@ Commands include: `list`/`ls`, `next`, `play FILE`, `mark FILE`,
 ## TODO
 
 * `ack TODO`
+* sign pypi package!
 * more file extensions!
 * kodi db export/sync?
 
