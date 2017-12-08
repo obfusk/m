@@ -51,6 +51,9 @@ RUN true vlc --fullscreen --play-and-exit -- .../test/media/z.mkv
 [x] x.mkv
 [*] y.mkv
 [>] z.mkv 0:02:01
+>>> t_main("next") # doctest: +ELLIPSIS
+Playing z.mkv from 0:02:01 ...
+RUN true vlc --fullscreen --play-and-exit --start-time 116 -- .../test/media/z.mkv
 >>> t_main("play y.mkv") # doctest: +ELLIPSIS
 Playing y.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../test/media/y.mkv
@@ -142,7 +145,7 @@ def _argument_parser():                                         # {{{1
 def do_list_dir(d, fs):
   for state, f in dir_iter(d, fs):
     o, t = ["["+INFOCHAR[state]+"]", f], db_t(fs, f)
-    if t: o.append(format_time(t))
+    if t: o.append(fmt_time(t))
     print(*o)
 
 def do_play_next(d, fs):
@@ -243,7 +246,7 @@ def check_filename(d, f):                                       # {{{1
 
 def play_file(d, fs, f):
   t = db_t(fs, f)
-  print("Playing", f, ("from " + format_time(t) if t else "") + "...")
+  print("Playing", f, ("from "+fmt_time(t)+" " if t else "") + "...")
   t_ = vlc_play(d, f, t)
   db_update(d, { f: t_ })
 
@@ -278,7 +281,7 @@ def vlc_get_times():                                            # {{{1
     return dict(zip(l,t))
                                                                 # }}}1
 
-def format_time(secs):
+def fmt_time(secs):
   return str(datetime.timedelta(seconds = secs))
 
 def do_something(f, d, args):
