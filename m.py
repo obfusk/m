@@ -202,8 +202,8 @@ def db_load(dirname):
 # TODO: use flock? backup?
 def db_update(dirname, files):                                  # {{{1
   (HOME / CFG).mkdir(exist_ok = True)
-  fs  = db_load(dirname)["files"]; fs.update(**files)
-  fs_ = { k:v for k,v in fs.items() if v != False }
+  fs  = db_load(dirname)["files"]
+  fs_ = { k:v for k,v in {**fs, **files}.items() if v != False }
   db  = _db_check(dirname, dict(dir = str(dirname), files = fs_))
   with db_dir_file(dirname).open("w") as f:
     json.dump(db, f, indent = 2, sort_keys = True)
