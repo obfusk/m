@@ -9,10 +9,7 @@
 
 <!-- }}}1 -->
 
-<!--
-[![PyPI version](https://badge.fury.io/py/m.svg)](https://badge.fury.io/py/m)
--->
-
+[![PyPI version](https://badge.fury.io/py/mmm.svg)](https://pypi.python.org/pypi/mmm)
 [![Build Status](https://travis-ci.org/obfusk/m.svg?branch=master)](https://travis-ci.org/obfusk/m)
 
 ## Description

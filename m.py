@@ -329,7 +329,11 @@ if sys.version_info.major >= 3:
 def prompt_yn(s):
   return not prompt(s + " [Yn]").lower().startswith("n")
 
+def main_():
+  """Entry point for main program."""
+  return main(*sys.argv[1:])
+
 if __name__ == "__main__":
-  sys.exit(main(*sys.argv[1:]))
+  sys.exit(main_())
 
 # vim: set tw=70 sw=2 sts=2 et fdm=marker :
