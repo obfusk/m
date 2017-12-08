@@ -1,0 +1,7 @@
+*.pyc
+
+.coverage
+htmlcov
+
+vlc-qt-interface.conf
+/test/home/.obfusk-m/*.json

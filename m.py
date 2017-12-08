@@ -5,31 +5,84 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-07
+# Date        : 2017-12-08
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
-# Version     : v0.0.1
+# Version     : v0.0.2
 # License     : GPLv3+
 #
 # --                                                            ; }}}1
 
                                                                 # {{{1
 r"""
-... TODO ...
+m - minimalistic media manager
+
+>>> import m
+>>> d           = cwd() / "test/media"
+>>> m.HOME      = cwd() / "test/home"   # monkey...
+>>> m.VLCCMD    = ["true"] + m.VLCCMD
+>>> m.prompt_yn = lambda _: True        # ...patch!
+>>> x, y, z     = d / "x.mkv", d / "y.mkv", d / "z.mkv"
+
+>>> _ = (m.HOME / m.VLCQT).write_text('''
+... [RecentsMRL]
+... list=file://{}, file://{}, file://{}
+... times=0, 0, 121666
+... '''.format(x, y, z))
+>>> m.vlc_get_times() == { str(x): 0, str(y): 0, str(z): 121 }
+True
+
+>>> def t_main(a): m.main("-d", str(d), *a.split())
+
+>>> t_main("ls")
+[ ] x.mkv
+[ ] y.mkv
+[ ] z.mkv
+>>> t_main("mark x.mkv")
+>>> t_main("skip y.mkv")
+>>> t_main("ls")
+[x] x.mkv
+[*] y.mkv
+[ ] z.mkv
+>>> t_main("next") # doctest: +ELLIPSIS
+Playing z.mkv ...
+RUN true vlc --fullscreen --play-and-exit -- .../test/media/z.mkv
+>>> t_main("ls")
+[x] x.mkv
+[*] y.mkv
+[>] z.mkv 0:02:01
+>>> t_main("play y.mkv") # doctest: +ELLIPSIS
+Playing y.mkv ...
+RUN true vlc --fullscreen --play-and-exit -- .../test/media/y.mkv
+>>> t_main("ls")
+[x] x.mkv
+[x] y.mkv
+[>] z.mkv 0:02:01
+>>> t_main("mark z.mkv")
+>>> t_main("next")
+No files to play.
+>>> t_main("unmark x.mkv")
+>>> t_main("unmark y.mkv")
+>>> t_main("ls")
+[ ] x.mkv
+[ ] y.mkv
+[x] z.mkv
 """
                                                                 # }}}1
 
-import argparse, hashlib, json, os, subprocess, sys, urllib
+import argparse, datetime, hashlib, json, os, subprocess, sys, urllib
 
 from collections import defaultdict
 from pathlib import Path
 
-__version__   = "0.0.1"
+__version__   = "0.0.2"
+
+DESC          = "m - minimalistic media manager"
 
 HOME          = Path.home()
-CFG           = HOME / ".obfusk-m"        # use git?! -> sync?!
-VLCQT         = HOME / ".config/vlc/vlc-qt-interface.conf"
-KODIDB        = HOME / ".kodi/userdata/Database/MyVideos107.db"
+CFG           = ".obfusk-m"                     # use git?! -> sync?!
+VLCQT         = ".config/vlc/vlc-qt-interface.conf"
+KODIDB        = ".kodi/userdata/Database/MyVideos107.db"
 
 EXTS          = ".avi .mp4 .mkv".split()  # TODO
 CONT_BACK     = 5                         # TODO
@@ -39,15 +92,20 @@ VLCCONT       = lambda t: ["--start-time", str(int(t))]
 
 INFOCHAR      = dict(zip("playing done new skip".split(),">x *"))
 
-def main(*args):
+def main(*args):                                                # {{{1
   p = _argument_parser(); n = p.parse_args(args)
   a = [n.file] if hasattr(n, "file") else []
-  return do_something(n.f, args = a) or 0
+  if n.subcommand == "test":
+    import doctest; doctest.testmod(verbose = n.verbose); return 0
+  return do_something(n.f, Path(n.dir) if n.dir else cwd(), a) or 0
+                                                                # }}}1
 
 def _argument_parser():                                         # {{{1
-  p = argparse.ArgumentParser(description = "m")
+  p = argparse.ArgumentParser(description = DESC)
   p.add_argument("--version", action = "version",
                  version = "%(prog)s {}".format(__version__))
+  p.add_argument("--dir", "-d", metavar = "DIR",
+                 help = "use DIR instead of $PWD")
 
   s = p.add_subparsers(title = "subcommands", dest = "subcommand")
   s.required = True           # https://bugs.python.org/issue9253
@@ -60,6 +118,9 @@ def _argument_parser():                                         # {{{1
   p_skip    = s.add_parser("skip"   , aliases = ["s"])
   p_kodi_w  = s.add_parser("kodi-import-watched")
   p_kodi_p  = s.add_parser("kodi-import-playing")
+
+  p_test    = s.add_parser("test")
+  p_test.add_argument("--verbose", "-v", action = "store_true")
 
   p_list    .set_defaults(f = do_list_dir)
   p_next    .set_defaults(f = do_play_next)
@@ -127,7 +188,7 @@ def dir_next(d, fs):
 
 def dir_files(dirname):
   return sorted( x.name for x in dirname.iterdir()
-                 if x.is_file() and x.suffix in EXTS )
+                 if x.is_file() and x.suffix.lower() in EXTS )
 
 # NB: files map to
 #   * True      (done)
@@ -140,7 +201,7 @@ def db_load(dirname):
 
 # TODO: use flock? backup?
 def db_update(dirname, files):                                  # {{{1
-  CFG.mkdir(exist_ok = True)
+  (HOME / CFG).mkdir(exist_ok = True)
   fs  = db_load(dirname)["files"]
   fs_ = { k:v for k,v in {**fs, **files}.items() if v != False }
   db  = _db_check(dirname, dict(dir = str(dirname), files = fs_))
@@ -162,7 +223,7 @@ def db_dir_file(dirname):
   d = str(dirname)
   x = "dir__" + d.replace("/", "|")[:200] + "__" + \
       hashlib.sha1(d.encode()).hexdigest() + ".json"
-  return CFG / x
+  return HOME / CFG / x
 
 def db_t(fs, f):
   t = fs.get(f)
@@ -170,12 +231,12 @@ def db_t(fs, f):
 
 # TODO
 def check_filename(d, f):                                       # {{{1
-  p = (d / Path(f)).relative_to(d)
+  p = d / Path(f); r = p.relative_to(d)
   if not p.is_file():
     raise ValueError("'{}' is not a file".format(p))
-  if len(p.parts) != 1:
+  if len(r.parts) != 1:
     raise ValueError("'{}' is not a file in '{}'".format(p, d))
-  return str(p)
+  return p.name
                                                                 # }}}1
 
 def play_file(d, fs, f):
@@ -184,22 +245,22 @@ def play_file(d, fs, f):
   t_ = vlc_play(d, f, t)
   db_update(d, { f: t_ })
 
-# TODO: error handling?
+# TODO: error handling? --noprompt?!
 # NB: we unfortunately can't tell the difference between a file that
 # has played completely and one that has played very little, so we
 # need to prompt :(
 def vlc_play(d, f, t = None):                                   # {{{1
   t_  = max(0, t - CONT_BACK) if t else 0
-  cmd = VLCCMD + VLCCONT(t_) if t_ else VLCCMD
-  subprocess.run(cmd + ["--", f], check = True)
+  cmd = VLCCMD + (VLCCONT(t_) if t_ else []) + ["--", d / f]
+  print("RUN", *cmd); subprocess.run(cmd, check = True)
   t2  = vlc_get_times().get(str(d / f)) or True
   return False if t2 == True and not prompt_yn("Done") else t2
                                                                 # }}}1
 
 # TODO: cleanup
 def vlc_get_times():                                            # {{{1
-  if not VLCQT.exists(): return {}
-  with VLCQT.open() as f:
+  if not (HOME / VLCQT).exists(): return {}
+  with (HOME / VLCQT).open() as f:
     rec, l, t = False, None, None
     for line in ( line.strip() for line in f ):
       if line == "[RecentsMRL]": rec = True
@@ -216,11 +277,9 @@ def vlc_get_times():                                            # {{{1
                                                                 # }}}1
 
 def format_time(secs):
-  s = secs % 60; m = secs // 60 % 60; h = secs // 60 // 60
-  return "{:02d}:{:02d}:{:02d}".format(h,m,s)
+  return str(datetime.timedelta(seconds = secs))
 
-def do_something(f, args = (), d = None):
-  if d is None: d = cwd()
+def do_something(f, d, args):
   return f(d, db_load(d)["files"], *args)
 
 # NB: use $PWD instead of Path.cwd() since we might be in a symlinked
@@ -233,7 +292,7 @@ def cwd(): return Path(os.environ["PWD"])
 
 def kodi_query(sql):                                            # {{{1
   import sqlite3
-  conn = sqlite3.connect(str(KODIDB))
+  conn = sqlite3.connect(str(HOME / KODIDB))
   try:
     c = conn.cursor(); c.execute(sql)
     for row in c: yield row

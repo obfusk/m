@@ -5,20 +5,28 @@
     Date        : 2017-12-08
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
-    Version     : v0.0.1
+    Version     : v0.0.2
 
 <!-- }}}1 -->
 
 <!--
 [![PyPI version](https://badge.fury.io/py/m.svg)](https://badge.fury.io/py/m)
-[![Build Status](https://travis-ci.org/obfusk/m.svg?branch=master)](https://travis-ci.org/obfusk/m)
 -->
+
+[![Build Status](https://travis-ci.org/obfusk/m.svg?branch=master)](https://travis-ci.org/obfusk/m)
 
 ## Description
 
-m - ...
+m - minimalistic media manager
 
-... TODO ...
+m keeps track of which files you've played (or are still playing) and
+thus allows you to easily continue playing the next file (using vlc).
+
+* Supports importing existing playing/watched data from Kodi.
+* Stores its data in JSON files (one per directory) in `~/.obfusk-m`;
+  you can put this directory in git if you want a changelog :)
+
+NB: extracting the timestamp from the vlc config is a little hacky :(
 
 ## Examples
 
@@ -31,16 +39,19 @@ $ m ls
 [x] Something - 04.mkv
 [x] Something - 05.mkv
 [x] Something - 06.mkv
-[>] Something - 07.mkv 00:03:58
+[>] Something - 07.mkv 0:04:04
 [ ] Something - 08.mkv
 [ ] Something - 09.mkv
-$ m next  # plays episode 7 w/ vlc
+$ m next  # plays current/next episode (i.e. #7) w/ vlc
 ```
+
+Commands include: `list`/`ls`, `next`, `play FILE`, `mark FILE`,
+`unmark FILE`, `skip FILE`.
 
 ## TODO
 
 * `ack TODO`
-* tests?
+* more file extensions!
 * kodi db export/sync?
 
 ## License
