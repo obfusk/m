@@ -96,7 +96,9 @@ def main(*args):                                                # {{{1
   p = _argument_parser(); n = p.parse_args(args)
   a = [n.file] if hasattr(n, "file") else []
   if n.subcommand == "test":
-    import doctest; doctest.testmod(verbose = n.verbose); return 0
+    import doctest
+    failures, tests = doctest.testmod(verbose = n.verbose)
+    return 0 if failures == 0 else 1
   return do_something(n.f, Path(n.dir) if n.dir else cwd(), a) or 0
                                                                 # }}}1
 
