@@ -1,9 +1,6 @@
 #!/usr/bin/python3
 # encoding: utf-8
 
-# TODO: README, LICENSE, tests, ...
-# WISHLIST: kodi db <->
-
 # --                                                            ; {{{1
 #
 # File        : m.py
@@ -22,13 +19,17 @@ r"""
 """
                                                                 # }}}1
 
-import hashlib, json, os, subprocess, sys, urllib
+import argparse, hashlib, json, os, subprocess, sys, urllib
 
+from collections import defaultdict
 from pathlib import Path
 
+__version__   = "0.0.1"
+
 HOME          = Path.home()
-CFG           = HOME / ".obfusk-m"
+CFG           = HOME / ".obfusk-m"        # use git?! -> sync?!
 VLCQT         = HOME / ".config/vlc/vlc-qt-interface.conf"
+KODIDB        = HOME / ".kodi/userdata/Database/MyVideos107.db"
 
 EXTS          = ".avi .mp4 .mkv".split()  # TODO
 CONT_BACK     = 5                         # TODO
@@ -36,24 +37,43 @@ CONT_BACK     = 5                         # TODO
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
 
-INFOCHAR      = dict(zip("playing done new".split(),">x "))
+INFOCHAR      = dict(zip("playing done new skip".split(),">x *"))
 
-if sys.version_info.major >= 3:
-  def prompt(s): return input(s + "? ")
-  def prompt_yn(s):
-    return not prompt(s + " [Yn]").lower().startswith("n")
+def main(*args):
+  p = _argument_parser(); n = p.parse_args(args)
+  a = [n.file] if hasattr(n, "file") else []
+  return do_something(n.f, args = a) or 0
 
-# TODO: proper parsing (argparse) etc.
-def main(*args):                                                # {{{1
-  if not args:
-    print("Usage: m { list | next | play <file> | [un]mark <file> }")
-    return 1
-  f = DISPATCH.get(args[0])
-  if not f:
-    print("Unknown command:", " ".join(args))
-    return 1
-  do_something(f, args = args[1:])
-  return 0
+def _argument_parser():                                         # {{{1
+  p = argparse.ArgumentParser(description = "m")
+  p.add_argument("--version", action = "version",
+                 version = "%(prog)s {}".format(__version__))
+
+  s = p.add_subparsers(title = "subcommands", dest = "subcommand")
+  s.required = True           # https://bugs.python.org/issue9253
+
+  p_list    = s.add_parser("list"   , aliases = "l ls".split())
+  p_next    = s.add_parser("next"   , aliases = ["n"])
+  p_play    = s.add_parser("play"   , aliases = ["p"])
+  p_mark    = s.add_parser("mark"   , aliases = ["m"])
+  p_unmark  = s.add_parser("unmark" , aliases = ["u"])
+  p_skip    = s.add_parser("skip"   , aliases = ["s"])
+  p_kodi_w  = s.add_parser("kodi-import-watched")
+  p_kodi_p  = s.add_parser("kodi-import-playing")
+
+  p_list    .set_defaults(f = do_list_dir)
+  p_next    .set_defaults(f = do_play_next)
+  p_play    .set_defaults(f = do_play_file)
+  p_mark    .set_defaults(f = do_mark_file)
+  p_unmark  .set_defaults(f = do_unmark_file)
+  p_skip    .set_defaults(f = do_skip_file)
+  p_kodi_w  .set_defaults(f = do_kodi_import_watched)
+  p_kodi_p  .set_defaults(f = do_kodi_import_playing)
+
+  for x in [p_play, p_mark, p_unmark, p_skip]:
+    x.add_argument("file", metavar = "FILE")
+
+  return p
                                                                 # }}}1
 
 def do_list_dir(d, db):
@@ -64,13 +84,12 @@ def do_list_dir(d, db):
 
 def do_play_next(d, db):
   f = dir_next(d, db)
-  if not f:
-    print("No files to play."); return
-  play_file(d, db, f, db_t(db, f))
+  if f: play_file(d, db, f)
+  else: print("No files to play.")
 
 def do_play_file(d, db, filename):
   f = check_filename(d, filename)
-  play_file(d, db, f, db_t(db, f))
+  play_file(d, db, f)
 
 def do_mark_file(d, db, filename):
   f = check_filename(d, filename)
@@ -80,39 +99,61 @@ def do_unmark_file(d, db, filename):
   f = check_filename(d, filename)
   db_update(d, { f: False })
 
+def do_skip_file(d, db, filename):
+  f = check_filename(d, filename)
+  db_update(d, { f: -1 })
+
+def do_kodi_import_watched(_d, _db):
+  data = defaultdict(dict)
+  for p, name in kodi_path_query(KODI_WATCHED_SQL):
+    data[p][name] = True
+  for d, fs in data.items(): db_update(d, fs)
+
+def do_kodi_import_playing(_d, _db):
+  data = defaultdict(dict)
+  for p, name, t in kodi_path_query(KODI_PLAYING_SQL):
+    data[p][name] = int(t)
+  for d, fs in data.items(): db_update(d, fs)
+
 def dir_iter(d, db):
+  info = { True: "done", -1: "skip" }
   for f in dir_files(d):
-    if f in db: yield ("done" if db[f] == True else "playing"), f
-    else:       yield "new", f
+    yield info.get(db[f], "playing") if f in db else "new", f
 
 def dir_next(d, db):
   for f in dir_files(d):
-    if f not in db or db[f] != True: return f
+    if f not in db or db[f] not in [True, -1]: return f
   return None
 
 def dir_files(dirname):
   return sorted( x.name for x in dirname.iterdir()
                  if x.is_file() and x.suffix in EXTS )
 
-def db_load(dirname):                                           # {{{1
+# NB: files map to
+#   * True      (done)
+#   * int (>0)  (playing, seconds)
+#   * int (-1)  (skip)
+def db_load(dirname):
   d = db_dir_file(dirname)
   if not d.exists(): return {}
   with d.open() as f:
-    fs = json.load(f)["files"]
-    assert all( x == True or type(x) == int for x in fs.values() )
-    return fs
-                                                                # }}}1
+    fs = json.load(f)["files"]; _db_check(fs); return fs
 
-# TODO: use flock?
+# TODO: use flock? backup?
 def db_update(dirname, files):                                  # {{{1
   CFG.mkdir(exist_ok = True)
   fs  = { k:v for k,v in {**db_load(dirname), **files}.items()
           if v != False }
-  dat = dict(dir = str(dirname), files = fs)
+  _db_check(fs)
   with db_dir_file(dirname).open("w") as f:
-    json.dump(dat, f, indent = 2, sort_keys = True)
+    json.dump(dict(dir = str(dirname), files = fs), f,
+              indent = 2, sort_keys = True)
     f.write("\n")
                                                                 # }}}1
+
+def _db_check(fs):
+  assert all( x == True or type(x) == int and (x > 0 or x == -1)
+              for x in fs.values() )
 
 def db_dir_file(dirname):
   d = str(dirname)
@@ -122,7 +163,7 @@ def db_dir_file(dirname):
 
 def db_t(db, f):
   t = db.get(f)
-  return None if t == True else t
+  return None if t in [True, -1] else t
 
 # TODO
 def check_filename(d, f):                                       # {{{1
@@ -134,9 +175,9 @@ def check_filename(d, f):                                       # {{{1
   return str(p)
                                                                 # }}}1
 
-def play_file(d, db, f, t = None):
-  print("Playing", f, "...")
-  if t: print("  from", format_time(t))
+def play_file(d, db, f):
+  t = db_t(db, f)
+  print("Playing", f, ("from " + format_time(t) if t else "") + "...")
   t_ = vlc_play(d, f, t)
   db_update(d, { f: t_ })
 
@@ -147,7 +188,7 @@ def play_file(d, db, f, t = None):
 def vlc_play(d, f, t = None):                                   # {{{1
   t_  = max(0, t - CONT_BACK) if t else 0
   cmd = VLCCMD + VLCCONT(t_) if t_ else VLCCMD
-  subprocess.check_call(cmd + ["--", f])
+  subprocess.run(cmd + ["--", f], check = True)
   t2  = vlc_get_times().get(str(d / f)) or True
   return False if t2 == True and not prompt_yn("Done") else t2
                                                                 # }}}1
@@ -162,10 +203,11 @@ def vlc_get_times():                                            # {{{1
       elif rec:
         if not line: break
         elif line.startswith("list="):
-          l = [ urllib.parse.unquote(x[7:] if x.startswith("file://")
-                  else x) for x in line[5:].split(", ") ]
+          l = [ urllib.parse.unquote(x[7:])
+                for x in line[5:].split(", ")
+                if x.startswith("file://") ]
         elif line.startswith("times="):
-          t = [ int(x) // 1000 for x in line[6:].split(", ") ]
+          t = [ max(0, int(x) // 1000) for x in line[6:].split(", ") ]
     if l is None or t is None: return {}
     return dict(zip(l,t))
                                                                 # }}}1
@@ -186,11 +228,44 @@ def do_something(f, args = (), d = None):
 # symlink targets.  It's also consistent w/ kodi.
 def cwd(): return Path(os.environ["PWD"])
 
-# TODO
-DISPATCH = dict(
-  list = do_list_dir, next = do_play_next, play = do_play_file,
-  mark = do_mark_file, unmark = do_unmark_file
-)
+def kodi_query(sql):                                            # {{{1
+  import sqlite3
+  conn = sqlite3.connect(str(KODIDB))
+  try:
+    c = conn.cursor(); c.execute(sql)
+    for row in c: yield row
+  finally:
+    conn.close()
+                                                                # }}}1
+
+# NB: first element in row must be a path
+def kodi_path_query(sql):
+  for row in kodi_query(sql):
+    f = Path(row[0]); p, name = f.parent, f.name
+    yield(p, name, *row[1:])
+
+KODI_WATCHED_SQL = """
+select p.strPath || f.strFileName as fp
+  from files f
+  join path p on p.idPath = f.idPath
+  where playCount > 0
+  order by fp;
+"""
+
+KODI_PLAYING_SQL = """
+select p.strPath || f.strFileName as fp, b.timeInSeconds
+  from bookmark b
+  join files f on f.idFile = b.idFile
+  join path p on p.idPath = f.idPath
+  where b.type = 1 -- resume
+  order by fp;
+"""
+
+if sys.version_info.major >= 3:
+  def prompt(s): return input(s + "? ")
+
+def prompt_yn(s):
+  return not prompt(s + " [Yn]").lower().startswith("n")
 
 if __name__ == "__main__":
   sys.exit(main(*sys.argv[1:]))
