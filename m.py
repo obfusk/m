@@ -304,7 +304,7 @@ def kodi_query(sql):                                            # {{{1
 def kodi_path_query(sql):
   for row in kodi_query(sql):
     f = Path(row[0]); p, name = f.parent, f.name
-    yield [p, name] + row[1:]
+    yield(p, name, *row[1:])
 
 KODI_WATCHED_SQL = """
 select p.strPath || f.strFileName as fp
