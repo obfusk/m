@@ -76,53 +76,53 @@ def _argument_parser():                                         # {{{1
   return p
                                                                 # }}}1
 
-def do_list_dir(d, db):
-  for state, f in dir_iter(d, db):
-    o, t = ["["+INFOCHAR[state]+"]", f], db_t(db, f)
+def do_list_dir(d, fs):
+  for state, f in dir_iter(d, fs):
+    o, t = ["["+INFOCHAR[state]+"]", f], db_t(fs, f)
     if t: o.append(format_time(t))
     print(*o)
 
-def do_play_next(d, db):
-  f = dir_next(d, db)
-  if f: play_file(d, db, f)
+def do_play_next(d, fs):
+  f = dir_next(d, fs)
+  if f: play_file(d, fs, f)
   else: print("No files to play.")
 
-def do_play_file(d, db, filename):
+def do_play_file(d, fs, filename):
   f = check_filename(d, filename)
-  play_file(d, db, f)
+  play_file(d, fs, f)
 
-def do_mark_file(d, db, filename):
+def do_mark_file(d, _fs, filename):
   f = check_filename(d, filename)
   db_update(d, { f: True })
 
-def do_unmark_file(d, db, filename):
+def do_unmark_file(d, _fs, filename):
   f = check_filename(d, filename)
   db_update(d, { f: False })
 
-def do_skip_file(d, db, filename):
+def do_skip_file(d, _fs, filename):
   f = check_filename(d, filename)
   db_update(d, { f: -1 })
 
-def do_kodi_import_watched(_d, _db):
+def do_kodi_import_watched(_d, _fs):
   data = defaultdict(dict)
   for p, name in kodi_path_query(KODI_WATCHED_SQL):
     data[p][name] = True
   for d, fs in data.items(): db_update(d, fs)
 
-def do_kodi_import_playing(_d, _db):
+def do_kodi_import_playing(_d, _fs):
   data = defaultdict(dict)
   for p, name, t in kodi_path_query(KODI_PLAYING_SQL):
     data[p][name] = int(t)
   for d, fs in data.items(): db_update(d, fs)
 
-def dir_iter(d, db):
+def dir_iter(d, fs):
   info = { True: "done", -1: "skip" }
   for f in dir_files(d):
-    yield info.get(db[f], "playing") if f in db else "new", f
+    yield info.get(fs[f], "playing") if f in fs else "new", f
 
-def dir_next(d, db):
+def dir_next(d, fs):
   for f in dir_files(d):
-    if f not in db or db[f] not in [True, -1]: return f
+    if f not in fs or fs[f] not in [True, -1]: return f
   return None
 
 def dir_files(dirname):
@@ -136,33 +136,36 @@ def dir_files(dirname):
 def db_load(dirname):
   d = db_dir_file(dirname)
   if not d.exists(): return {}
-  with d.open() as f:
-    fs = json.load(f)["files"]; _db_check(fs); return fs
+  with d.open() as f: return _db_check(dirname, json.load(f))
 
 # TODO: use flock? backup?
 def db_update(dirname, files):                                  # {{{1
   CFG.mkdir(exist_ok = True)
-  fs  = { k:v for k,v in {**db_load(dirname), **files}.items()
-          if v != False }
-  _db_check(fs)
+  fs  = db_load(dirname)["files"]
+  fs_ = { k:v for k,v in {**fs, **files}.items() if v != False }
+  db  = _db_check(dirname, dict(dir = str(dirname), files = fs_))
   with db_dir_file(dirname).open("w") as f:
-    json.dump(dict(dir = str(dirname), files = fs), f,
-              indent = 2, sort_keys = True)
+    json.dump(db, f, indent = 2, sort_keys = True)
     f.write("\n")
                                                                 # }}}1
 
-def _db_check(fs):
+def _db_check(dirname, db):                                     # {{{1
+  assert sorted(db.keys()) == "dir files".split()
+  assert db["dir"] == str(dirname)
   assert all( x == True or type(x) == int and (x > 0 or x == -1)
-              for x in fs.values() )
+              for x in db["files"].values() )
+  return db
+                                                                # }}}1
 
+# NB: max filename len = 255 > 5 + 200 + 2 + 40 + 5 = 252
 def db_dir_file(dirname):
   d = str(dirname)
-  x = "dir__" + d.replace("/", "|") + "__" + \
+  x = "dir__" + d.replace("/", "|")[:200] + "__" + \
       hashlib.sha1(d.encode()).hexdigest() + ".json"
   return CFG / x
 
-def db_t(db, f):
-  t = db.get(f)
+def db_t(fs, f):
+  t = fs.get(f)
   return None if t in [True, -1] else t
 
 # TODO
@@ -175,8 +178,8 @@ def check_filename(d, f):                                       # {{{1
   return str(p)
                                                                 # }}}1
 
-def play_file(d, db, f):
-  t = db_t(db, f)
+def play_file(d, fs, f):
+  t = db_t(fs, f)
   print("Playing", f, ("from " + format_time(t) if t else "") + "...")
   t_ = vlc_play(d, f, t)
   db_update(d, { f: t_ })
@@ -218,7 +221,7 @@ def format_time(secs):
 
 def do_something(f, args = (), d = None):
   if d is None: d = cwd()
-  return f(d, db_load(d), *args)
+  return f(d, db_load(d)["files"], *args)
 
 # NB: use $PWD instead of Path.cwd() since we might be in a symlinked
 # directory in the shell we've been run from.  We could follow the
