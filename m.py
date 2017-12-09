@@ -8,7 +8,7 @@
 # Date        : 2017-12-08
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
-# Version     : v0.1.0
+# Version     : v0.1.1
 # License     : GPLv3+
 #
 # --                                                            ; }}}1
@@ -93,7 +93,7 @@ import argparse, datetime, hashlib, json, os, subprocess, sys, urllib
 from collections import defaultdict
 from pathlib import Path
 
-__version__   = "0.1.0"
+__version__   = "0.1.1"
 
 DESC          = "m - minimalistic media manager"
 
