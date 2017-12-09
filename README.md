@@ -44,10 +44,10 @@ $ m next  # plays current/next episode (i.e. #7) w/ vlc
 
 ```bash
 $ m ld    # list dirs (shows #playing, #new for indexed subdirectories)
-( 0> 2!) Dir A
-(      ) Dir B
-( 1> 0!) Dir C
-( 0> 0!) Dir D
+(   2!) Dir A
+(     ) Dir B
+(1> 0!) Dir C
+(   0!) Dir D
 ```
 
 Commands include: `list`/`ls`, `list-dirs`/`ld`, `list-all`/`la`,

@@ -22,14 +22,16 @@ m - minimalistic media manager
 >>> m.HOME      = cwd() / "test/home"   # monkey...
 >>> m.VLCCMD    = ["true"] + m.VLCCMD
 >>> m.prompt_yn = lambda _: True        # ...patch!
->>> x, y, z     = d / "x.mkv", d / "y.mkv", d / "z.mkv"
+>>> x, y, z, a  = d / "x.mkv", d / "y.mkv", d / "z.mkv", \
+...               d / "more/a.mkv"
 
 >>> _ = (m.HOME / m.VLCQT).write_text('''
 ... [RecentsMRL]
-... list=file://{}, file://{}, file://{}
-... times=0, 0, 121666
-... '''.format(x, y, z))
->>> m.vlc_get_times() == { str(x): 0, str(y): 0, str(z): 121 }
+... list=file://{}, file://{}, file://{}, file://{}
+... times=0, 0, 121666, 246135
+... '''.format(x, y, z, a))
+>>> m.vlc_get_times() == { str(x): 0, str(y): 0, str(z): 121,
+...                        str(a): 246 }
 True
 
 >>> def t_main(a, d = d): m.main("-d", str(d), *a.split())
@@ -72,16 +74,19 @@ No files to play.
 [x] z.mkv
 
 >>> t_main("ld")
-(      ) more
+(     ) more
 >>> t_main("index", d = d / "more")
 >>> t_main("ld")
-( 0> 2!) more
+(   2!) more
 >>> t_main("ls", d = d / "more")
 [ ] a.mkv
 [ ] b.mkv
->>> t_main("mark a.mkv", d = d / "more")
+>>> t_main("play a.mkv", d = d / "more") # doctest: +ELLIPSIS
+Playing a.mkv ...
+RUN true vlc --fullscreen --play-and-exit -- .../test/media/more/a.mkv
+>>> t_main("mark b.mkv", d = d / "more")
 >>> t_main("la")
-( 0> 1!) more
+(1> 0!) more
 [ ] x.mkv
 [ ] y.mkv
 [x] z.mkv
@@ -172,7 +177,7 @@ def do_list_dir_files(d, fs):
 
 def do_list_dir_dirs(d, _fs):
   for sd, pla, new in dir_iter_dirs(d):
-    p = "{:2}>".format(pla) if pla is not None else " "*3
+    p = "{:1}>".format(pla) if pla             else " "*2
     n = "{:2}!".format(new) if new is not None else " "*3
     print("(" + p + n + ")", sd)
 
