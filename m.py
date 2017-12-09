@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-08
+# Date        : 2017-12-09
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
 # Version     : v0.1.1
@@ -17,24 +17,28 @@
 r"""
 m - minimalistic media manager
 
->>> import m
->>> d           = cwd() / "test/media"
->>> m.HOME      = cwd() / "test/home"   # monkey...
->>> m.VLCCMD    = ["true"] + m.VLCCMD
->>> m.prompt_yn = lambda _: True        # ...patch!
->>> x, y, z, a  = d / "x.mkv", d / "y.mkv", d / "z.mkv", \
-...               d / "more/a.mkv"
+>>> # NB: tests must be run from _test()!
+>>> if "TEST_DIR" not in globals():
+...   raise KeyboardInterrupt("*** ABORT ***")
 
->>> _ = (m.HOME / m.VLCQT).write_text('''
+>>> d             = TEST_DIR / "media"
+>>> x, y, z, a, b = d / "x.mkv", d / "y.mkv", d / "z.mkv", \
+...                 d / "more/a.mkv", d / "more/b.mkv"
+
+>>> for _d in [d, d / "more", FAKE_HOME, FAKE_HOME / CFG]: _d.mkdir()
+>>> for _f in [x, y, z, a, b]: _f.touch()
+>>> (FAKE_HOME / VLCQT).parent.mkdir(parents = True)
+
+>>> _ = (FAKE_HOME / VLCQT).write_text('''
 ... [RecentsMRL]
 ... list=file://{}, file://{}, file://{}, file://{}
 ... times=0, 0, 121666, 246135
 ... '''.format(x, y, z, a))
->>> m.vlc_get_times() == { str(x): 0, str(y): 0, str(z): 121,
-...                        str(a): 246 }
+>>> vlc_get_times() == { str(x): 0, str(y): 0, str(z): 121,
+...                      str(a): 246 }
 True
 
->>> def t_main(a, d = d): m.main("-d", str(d), *a.split())
+>>> def t_main(a, d = d): main("-d", str(d), *a.split())
 
 >>> t_main("ls")
 [ ] x.mkv
@@ -48,17 +52,17 @@ True
 [ ] z.mkv
 >>> t_main("next") # doctest: +ELLIPSIS
 Playing z.mkv ...
-RUN true vlc --fullscreen --play-and-exit -- .../test/media/z.mkv
+RUN true vlc --fullscreen --play-and-exit -- .../media/z.mkv
 >>> t_main("ls")
 [x] x.mkv
 [*] y.mkv
 [>] z.mkv 0:02:01
 >>> t_main("next") # doctest: +ELLIPSIS
 Playing z.mkv from 0:02:01 ...
-RUN true vlc --fullscreen --play-and-exit --start-time 116 -- .../test/media/z.mkv
+RUN true vlc --fullscreen --play-and-exit --start-time 116 -- .../media/z.mkv
 >>> t_main("play y.mkv") # doctest: +ELLIPSIS
 Playing y.mkv ...
-RUN true vlc --fullscreen --play-and-exit -- .../test/media/y.mkv
+RUN true vlc --fullscreen --play-and-exit -- .../media/y.mkv
 >>> t_main("ls")
 [x] x.mkv
 [x] y.mkv
@@ -83,7 +87,7 @@ No files to play.
 [ ] b.mkv
 >>> t_main("play a.mkv", d = d / "more") # doctest: +ELLIPSIS
 Playing a.mkv ...
-RUN true vlc --fullscreen --play-and-exit -- .../test/media/more/a.mkv
+RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 >>> t_main("mark b.mkv", d = d / "more")
 >>> t_main("la")
 (1> 0!) more
@@ -107,8 +111,8 @@ CFG           = ".obfusk-m"                     # use git?! -> sync?!
 VLCQT         = ".config/vlc/vlc-qt-interface.conf"
 KODIDB        = ".kodi/userdata/Database/MyVideos107.db"
 
-EXTS          = ".avi .mp4 .mkv".split()  # TODO
-CONT_BACK     = 5                         # TODO
+EXTS          = ".avi .m4v .mkv .mp3 .mp4 .ogg .ogv".split()    # TODO
+CONT_BACK     = 5                                               # TODO
 
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
@@ -116,15 +120,11 @@ VLCCONT       = lambda t: ["--start-time", str(int(t))]
 INFOS, INFOC  = "skip done playing new".split(), "*x> "
 INFOCHAR      = dict(zip(INFOS, INFOC))
 
-def main(*args):                                                # {{{1
+def main(*args):
   p = _argument_parser(); n = p.parse_args(args)
   a = [n.file] if hasattr(n, "file") else []
-  if n.subcommand == "test":
-    import doctest
-    failures, tests = doctest.testmod(verbose = n.verbose)
-    return 0 if failures == 0 else 1
+  if n.subcommand == "_test": return _test(n.verbose)
   return do_something(n.f, Path(n.dir) if n.dir else cwd(), a) or 0
-                                                                # }}}1
 
 def _argument_parser():                                         # {{{1
   p = argparse.ArgumentParser(description = DESC)
@@ -148,7 +148,7 @@ def _argument_parser():                                         # {{{1
   p_kodi_w  = s.add_parser("kodi-import-watched")
   p_kodi_p  = s.add_parser("kodi-import-playing")
 
-  p_test    = s.add_parser("test")
+  p_test    = s.add_parser("_test")
   p_test.add_argument("--verbose", "-v", action = "store_true")
 
   p_list    .set_defaults(f = do_list_dir_files)
@@ -167,6 +167,24 @@ def _argument_parser():                                         # {{{1
     x.add_argument("file", metavar = "FILE")
 
   return p
+                                                                # }}}1
+
+# NB: monkey-patches HOME, VLCCMD, prompt_yn!
+def _test(verbose = False):                                     # {{{1
+  import doctest, tempfile
+  global FAKE_HOME, TEST_DIR, HOME, VLCCMD, prompt_yn
+  old = HOME, VLCCMD, prompt_yn
+  try:
+    with tempfile.TemporaryDirectory() as tdir:
+      TEST_DIR  = Path(tdir)
+      FAKE_HOME = HOME = TEST_DIR / "home"
+      VLCCMD    = ["true"] + VLCCMD
+      prompt_yn = lambda _: True
+      m = None if __name__ == "__main__" else sys.modules[__name__]
+      failures, _tests = doctest.testmod(m, verbose = verbose)
+  finally:
+    HOME, VLCCMD, prompt_yn = old
+  return 0 if failures == 0 else 1
                                                                 # }}}1
 
 def do_list_dir_files(d, fs):
@@ -317,7 +335,7 @@ def vlc_play(d, f, t = None):                                   # {{{1
   return False if t2 == True and not prompt_yn("Done") else t2
                                                                 # }}}1
 
-# TODO: cleanup
+# TODO: cleanup?
 def vlc_get_times():                                            # {{{1
   if not (HOME / VLCQT).exists(): return {}
   with (HOME / VLCQT).open() as f:

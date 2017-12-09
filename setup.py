@@ -23,7 +23,7 @@ setup(
     "Topic :: Multimedia :: Video",
     "Topic :: Utilities",
   ],
-  keywords          = "media vlc",
+  keywords          = "media video vlc",
   py_modules        = ["m"],
   entry_points      = { "console_scripts": ["m=m:main_"] },
   python_requires   = ">=3.5",
