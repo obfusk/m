@@ -55,6 +55,18 @@ Commands include: `list`/`ls`, `list-dirs`/`ld`, `list-all`/`la`,
 
 See also the tests in the source code for more examples.
 
+## Installing
+
+You can just put `m.py` somewhere on your `$PATH` (in e.g. `~/bin`; I
+suggest calling it `m`, but you're free to choose another name).
+
+Alternatively, you can use pip:
+
+```bash
+$ pip3 install --user mmm   # for Debian; on other OS's you may need
+                            # pip instead of pip3 and/or no --user
+```
+
 ## TODO
 
 * `ack TODO`
