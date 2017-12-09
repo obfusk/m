@@ -32,7 +32,7 @@ m - minimalistic media manager
 >>> m.vlc_get_times() == { str(x): 0, str(y): 0, str(z): 121 }
 True
 
->>> def t_main(a): m.main("-d", str(d), *a.split())
+>>> def t_main(a, d = d): m.main("-d", str(d), *a.split())
 
 >>> t_main("ls")
 [ ] x.mkv
@@ -70,6 +70,21 @@ No files to play.
 [ ] x.mkv
 [ ] y.mkv
 [x] z.mkv
+
+>>> t_main("ld")
+(      ) more
+>>> t_main("index", d = d / "more")
+>>> t_main("ld")
+( 0> 2!) more
+>>> t_main("ls", d = d / "more")
+[ ] a.mkv
+[ ] b.mkv
+>>> t_main("mark a.mkv", d = d / "more")
+>>> t_main("la")
+( 0> 1!) more
+[ ] x.mkv
+[ ] y.mkv
+[x] z.mkv
 """
                                                                 # }}}1
 
@@ -93,7 +108,8 @@ CONT_BACK     = 5                         # TODO
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
 
-INFOCHAR      = dict(zip("playing done new skip".split(),">x *"))
+INFOS, INFOC  = "skip done playing new".split(), "*x> "
+INFOCHAR      = dict(zip(INFOS, INFOC))
 
 def main(*args):                                                # {{{1
   p = _argument_parser(); n = p.parse_args(args)
@@ -115,24 +131,30 @@ def _argument_parser():                                         # {{{1
   s = p.add_subparsers(title = "subcommands", dest = "subcommand")
   s.required = True           # https://bugs.python.org/issue9253
 
-  p_list    = s.add_parser("list"   , aliases = "l ls".split())
-  p_next    = s.add_parser("next"   , aliases = ["n"])
-  p_play    = s.add_parser("play"   , aliases = ["p"])
-  p_mark    = s.add_parser("mark"   , aliases = ["m"])
-  p_unmark  = s.add_parser("unmark" , aliases = ["u"])
-  p_skip    = s.add_parser("skip"   , aliases = ["s"])
+  p_list    = s.add_parser("list"       , aliases = "l ls".split())
+  p_list_d  = s.add_parser("list-dirs"  , aliases = ["ld"])
+  p_list_a  = s.add_parser("list-all"   , aliases = ["la"])
+  p_next    = s.add_parser("next"       , aliases = ["n"])
+  p_play    = s.add_parser("play"       , aliases = ["p"])
+  p_mark    = s.add_parser("mark"       , aliases = ["m"])
+  p_unmark  = s.add_parser("unmark"     , aliases = ["u"])
+  p_skip    = s.add_parser("skip"       , aliases = ["s"])
+  p_index   = s.add_parser("index"      , aliases = ["i"])
   p_kodi_w  = s.add_parser("kodi-import-watched")
   p_kodi_p  = s.add_parser("kodi-import-playing")
 
   p_test    = s.add_parser("test")
   p_test.add_argument("--verbose", "-v", action = "store_true")
 
-  p_list    .set_defaults(f = do_list_dir)
+  p_list    .set_defaults(f = do_list_dir_files)
+  p_list_d  .set_defaults(f = do_list_dir_dirs)
+  p_list_a  .set_defaults(f = do_list_dir_all)
   p_next    .set_defaults(f = do_play_next)
   p_play    .set_defaults(f = do_play_file)
   p_mark    .set_defaults(f = do_mark_file)
   p_unmark  .set_defaults(f = do_unmark_file)
   p_skip    .set_defaults(f = do_skip_file)
+  p_index   .set_defaults(f = do_index_dir)
   p_kodi_w  .set_defaults(f = do_kodi_import_watched)
   p_kodi_p  .set_defaults(f = do_kodi_import_playing)
 
@@ -142,11 +164,21 @@ def _argument_parser():                                         # {{{1
   return p
                                                                 # }}}1
 
-def do_list_dir(d, fs):
+def do_list_dir_files(d, fs):
   for state, f in dir_iter(d, fs):
     o, t = ["["+INFOCHAR[state]+"]", f], db_t(fs, f)
     if t: o.append(fmt_time(t))
     print(*o)
+
+def do_list_dir_dirs(d, _fs):
+  for sd, pla, new in dir_iter_dirs(d):
+    p = "{:2}>".format(pla) if pla is not None else " "*3
+    n = "{:2}!".format(new) if new is not None else " "*3
+    print("(" + p + n + ")", sd)
+
+def do_list_dir_all(d, fs):
+  do_list_dir_dirs(d, fs)
+  do_list_dir_files(d, fs)
 
 def do_play_next(d, fs):
   f = dir_next(d, fs)
@@ -169,6 +201,9 @@ def do_skip_file(d, _fs, filename):
   f = check_filename(d, filename)
   db_update(d, { f: -1 })
 
+def do_index_dir(d, _fs):
+  db_update(d, {})
+
 def do_kodi_import_watched(_d, _fs):
   data = defaultdict(dict)
   for p, name in kodi_path_query(KODI_WATCHED_SQL):
@@ -181,15 +216,30 @@ def do_kodi_import_playing(_d, _fs):
     data[p][name] = int(t)
   for d, fs in data.items(): db_update(d, fs)
 
-def dir_iter(d, fs):
+def dir_iter(d, fs = None):
+  if fs is None: fs = db_load(d)["files"]
   info = { True: "done", -1: "skip" }
   for f in dir_files(d):
     yield info.get(fs[f], "playing") if f in fs else "new", f
+
+def dir_iter_dirs(d):                                           # {{{1
+  for sd in dir_dirs(d):
+    if db_dir_file(d / sd).exists():
+      info = dict(playing = 0, new = 0)
+      for x,_ in dir_iter(d / sd):
+        if x in info: info[x] += 1
+      yield sd, info["playing"], info["new"]
+    else:
+      yield sd, None, None
+                                                                # }}}1
 
 def dir_next(d, fs):
   for f in dir_files(d):
     if f not in fs or fs[f] not in [True, -1]: return f
   return None
+
+def dir_dirs(dirname):
+  return sorted( x.name for x in dirname.iterdir() if x.is_dir() )
 
 def dir_files(dirname):
   return sorted( x.name for x in dirname.iterdir()

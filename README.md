@@ -29,7 +29,7 @@ NB: extracting the timestamp from the vlc config is a little hacky :(
 
 ```bash
 $ cd /some/media/dir
-$ m ls
+$ m ls    # list files ([*] = skip, [x] = done, [>] = playing, [ ] = new)
 [x] Something - 01.mkv
 [x] Something - 02.mkv
 [x] Something - 03.mkv
@@ -42,15 +42,25 @@ $ m ls
 $ m next  # plays current/next episode (i.e. #7) w/ vlc
 ```
 
-Commands include: `list`/`ls`, `next`, `play FILE`, `mark FILE`,
-`unmark FILE`, `skip FILE`.
+```bash
+$ m ld    # list dirs (shows #playing, #new for indexed subdirectories)
+( 0> 2!) Dir A
+(      ) Dir B
+( 1> 0!) Dir C
+( 0> 0!) Dir D
+```
+
+Commands include: `list`/`ls`, `list-dirs`/`ld`, `list-all`/`la`,
+`next`, `play FILE`, `mark FILE`, `unmark FILE`, `skip FILE`, `index`.
+
+See also the tests in the source code for more examples.
 
 ## TODO
 
 * `ack TODO`
-* sign pypi package!
 * more file extensions!
 * kodi db export/sync?
+* sign pypi package?
 
 ## License
 
