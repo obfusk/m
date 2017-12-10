@@ -31,4 +31,4 @@ package: README.rst
 
 publish: clean package
 	read -r -p "Are you sure? "; \
-	[[ "$$REPLY" =~ [Yy]* ]] && twine upload dist/*
+	[[ "$$REPLY" == [Yy]* ]] && twine upload dist/*
