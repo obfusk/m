@@ -5,10 +5,10 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-09
+# Date        : 2017-12-10
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
-# Version     : v0.1.1
+# Version     : v0.2.0
 # License     : GPLv3+
 #
 # --                                                            ; }}}1
@@ -172,7 +172,7 @@ import argparse, datetime, hashlib, json, os, subprocess, sys, urllib
 from collections import defaultdict
 from pathlib import Path
 
-__version__   = "0.1.1"
+__version__   = "0.2.0"
 
 DESC          = "m - minimalistic media manager"
 

@@ -2,10 +2,10 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2017-12-09
+    Date        : 2017-12-10
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
-    Version     : v0.1.1
+    Version     : v0.2.0
 
 <!-- }}}1 -->
 
@@ -82,6 +82,7 @@ $ pip3 install --user mmm   # for Debian; on other OS's you may need
 * only use `safe()` when stdout is a tty?
 * bash completion?
 * more file extensions!
+* `--tree` for `playing` etc.?
 * kodi db export/sync?
 * sign pypi package?
 
