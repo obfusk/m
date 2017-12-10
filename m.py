@@ -116,10 +116,10 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 [ ] y.mkv
 [x] z.mkv
 >>> run("ld", c = True)
-(RED1NON>WHI 0NON!) more
+(RED1NON>YLL 0NON!) more
 >>> run("unmark b.mkv", d = d / "more")
 >>> run("ld", c = True)
-(RED1NON>YLL 1NON!) more
+(RED1NON>BLU 1NON!) more
 
 >>> (d / "un\033safe\x01file.mkv").touch()
 >>> (d / "unsafe\ndir").mkdir()
@@ -159,7 +159,7 @@ VLCCMD        = "vlc --fullscreen --play-and-exit".split()
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
 
 INFOS, INFOCH = "skip done playing new".split(), "*x> "
-INFOCO        = "cya grn red yll".split()
+INFOCO        = "cya grn red blu".split()
 INFOCHAR      = dict(zip(INFOS, INFOCH))
 INFOCHAR_L    = dict(INFOCHAR, new = "!")
 INFOCOLOUR_L  = dict(zip(INFOS, INFOCO))
@@ -280,7 +280,7 @@ def do_list_dir_dirs(d, _fs):
 
 def _linfo(n, st, w, c):
   if not c: return " "*(w+1)
-  return clr(INFOCOLOUR_L[st] if n else "whi", str(n).rjust(w)) + \
+  return clr(INFOCOLOUR_L[st] if n else "yll", str(n).rjust(w)) + \
          INFOCHAR_L[st]
 
 def do_list_dir_all(d, fs):
@@ -498,9 +498,9 @@ select p.strPath || f.strFileName as fp, b.timeInSeconds
 # === colours ===
 
 COLOURS = dict(
-  non = "\033[0m"   , red = "\033[1;31m", grn = "\033[1;32m",
-  yll = "\033[1;33m", blu = "\033[1;34m", pur = "\033[1;35m",
-  cya = "\033[1;36m", whi = "\033[1;37m"
+  non = "\033[0m"   , red = "\033[0;31m", grn = "\033[0;32m",
+  yll = "\033[1;33m", blu = "\033[0;34m", pur = "\033[0;35m",
+  cya = "\033[0;36m", whi = "\033[1;37m"
 )
 
 # NB: modified by --[no-]colour
