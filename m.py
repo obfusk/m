@@ -176,7 +176,8 @@ def main(*args):                                                # {{{1
   a = [n.file] if hasattr(n, "file") else []
   if n.subcommand == "_test": return _test(n.verbose)
   if n.colour is not None: USE_COLOUR = n.colour
-  return do_something(n.f, Path(n.dir) if n.dir else cwd(), a) or 0
+  dpath = cwd() / Path(n.dir) if n.dir else cwd()
+  return do_something(n.f, dpath, a) or 0
                                                                 # }}}1
 
 def _argument_parser():                                         # {{{1

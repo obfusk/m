@@ -25,6 +25,14 @@ thus allows you to easily continue playing the next file (using vlc).
 
 NB: extracting the timestamp from the vlc config is a little hacky :(
 
+NB: m uses `$PWD` to make sure it sees the current path the same as
+the shell it is run from (i.e. it does not resolve the path by
+following symlinks, allowing the link targets to be relocated);
+unfortunately, this means that it *does not* see two directories as
+identical if they are accessed using different paths, even if the
+resolved path is the same.  So you may want to avoid using different
+paths to the same directory (and `--dir`).
+
 ## Examples
 
 ```bash
