@@ -22,7 +22,9 @@ clean:
 	find -name __pycache__ -delete
 
 %.rst: %.md
-	pandoc -o $@ $<
+	grep -Ev '^\s*<!--.*-->\s*$$' $< \
+	  | pandoc --from=markdown -o $@
+	! grep -q raw:: $@
 
 package: README.rst
 	$(PY) setup.py sdist bdist_wheel
