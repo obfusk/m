@@ -38,7 +38,8 @@ m - minimalistic media manager
 ...                      str(a): 246 }
 True
 
->>> def t_main(a, d = d): main("-d", str(d), *a.split())
+>>> def t_main(a, d = d, c = False):
+...   main("--colour" if c else "--no-colour", "-d", str(d), *a.split())
 
 >>> t_main("ls")
 [ ] x.mkv
@@ -57,6 +58,10 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/z.mkv
 [x] x.mkv
 [*] y.mkv
 [>] z.mkv 0:02:01
+>>> t_main("ls", c = True)
+[GRNxNON] x.mkv
+[CYA*NON] y.mkv
+[RED>NON] z.mkv 0:02:01
 >>> t_main("next") # doctest: +ELLIPSIS
 Playing z.mkv from 0:02:01 ...
 RUN true vlc --fullscreen --play-and-exit --start-time 116 -- .../media/z.mkv
@@ -94,6 +99,11 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 [ ] x.mkv
 [ ] y.mkv
 [x] z.mkv
+>>> t_main("ld", c = True)
+(RED1NON>WHI 0NON!) more
+>>> t_main("unmark b.mkv", d = d / "more")
+>>> t_main("ld", c = True)
+(RED1NON>YLL 1NON!) more
 """
                                                                 # }}}1
 
@@ -117,14 +127,24 @@ CONT_BACK     = 5                                               # TODO
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
 
-INFOS, INFOC  = "skip done playing new".split(), "*x> "
-INFOCHAR      = dict(zip(INFOS, INFOC))
+INFOS, INFOCH = "skip done playing new".split(), "*x> "
+INFOCO        = "cya grn red yll".split()
+INFOCHAR      = dict(zip(INFOS, INFOCH))
+INFOCHAR_L    = dict(INFOCHAR, new = "!")
+INFOCOLOUR_L  = dict(zip(INFOS, INFOCO))
+INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
 
-def main(*args):
+# === main & related functions ===
+
+# NB: sets USE_COLOUR
+def main(*args):                                                # {{{1
+  global USE_COLOUR
   p = _argument_parser(); n = p.parse_args(args)
   a = [n.file] if hasattr(n, "file") else []
   if n.subcommand == "_test": return _test(n.verbose)
+  if n.colour is not None: USE_COLOUR = n.colour
   return do_something(n.f, Path(n.dir) if n.dir else cwd(), a) or 0
+                                                                # }}}1
 
 def _argument_parser():                                         # {{{1
   p = argparse.ArgumentParser(description = DESC)
@@ -133,20 +153,40 @@ def _argument_parser():                                         # {{{1
   p.add_argument("--dir", "-d", metavar = "DIR",
                  help = "use DIR instead of $PWD")
 
+  g = p.add_mutually_exclusive_group()
+  p.set_defaults(colour = None)
+  g.add_argument("--colour", action = "store_true",
+                 help = "use coloured output "
+                        "(the default when stdout is a tty)")
+  g.add_argument("--no-colour", "--nocolour",
+                 action = "store_false", dest = "colour",
+                 help = "do not use coloured output")
+
   s = p.add_subparsers(title = "subcommands", dest = "subcommand")
   s.required = True           # https://bugs.python.org/issue9253
 
-  p_list    = s.add_parser("list"       , aliases = "l ls".split())
-  p_list_d  = s.add_parser("list-dirs"  , aliases = ["ld"])
-  p_list_a  = s.add_parser("list-all"   , aliases = ["la"])
-  p_next    = s.add_parser("next"       , aliases = ["n"])
-  p_play    = s.add_parser("play"       , aliases = ["p"])
-  p_mark    = s.add_parser("mark"       , aliases = ["m"])
-  p_unmark  = s.add_parser("unmark"     , aliases = ["u"])
-  p_skip    = s.add_parser("skip"       , aliases = ["s"])
-  p_index   = s.add_parser("index"      , aliases = ["i"])
-  p_kodi_w  = s.add_parser("kodi-import-watched")
-  p_kodi_p  = s.add_parser("kodi-import-playing")
+  p_list    = s.add_parser("list", aliases = "l ls".split(),
+                           help = "list files")
+  p_list_d  = s.add_parser("list-dirs", aliases = ["ld"],
+                           help = "list directories")
+  p_list_a  = s.add_parser("list-all", aliases = ["la"],
+                           help = "list directories & files")
+  p_next    = s.add_parser("next", aliases = ["n"],
+                           help = "play next file")
+  p_play    = s.add_parser("play", aliases = ["p"],
+                           help = "play FILE")
+  p_mark    = s.add_parser("mark", aliases = ["m"],
+                           help = "mark FILE as done")
+  p_unmark  = s.add_parser("unmark", aliases = ["u"],
+                           help = "mark FILE as new")
+  p_skip    = s.add_parser("skip", aliases = ["s"],
+                           help = "mark FILE as skip")
+  p_index   = s.add_parser("index", aliases = ["i"],
+                           help = "index current directory")
+  p_kodi_w  = s.add_parser("kodi-import-watched",
+                           help = "import watched data from kodi")
+  p_kodi_p  = s.add_parser("kodi-import-playing",
+                           help = "import playing data from kodi")
 
   p_test    = s.add_parser("_test")
   p_test.add_argument("--verbose", "-v", action = "store_true")
@@ -169,35 +209,48 @@ def _argument_parser():                                         # {{{1
   return p
                                                                 # }}}1
 
-# NB: monkey-patches HOME, VLCCMD, prompt_yn!
+# NB: monkey-patches HOME, VLCCMD, prompt_yn, COLOURS!
 def _test(verbose = False):                                     # {{{1
   import doctest, tempfile
-  global FAKE_HOME, TEST_DIR, HOME, VLCCMD, prompt_yn
-  old = HOME, VLCCMD, prompt_yn
+  global FAKE_HOME, TEST_DIR, HOME, VLCCMD, prompt_yn, COLOURS
+  old = HOME, VLCCMD, prompt_yn, COLOURS
   try:
     with tempfile.TemporaryDirectory() as tdir:
       TEST_DIR  = Path(tdir)
       FAKE_HOME = HOME = TEST_DIR / "home"
       VLCCMD    = ["true"] + VLCCMD
       prompt_yn = lambda _: True
+      COLOURS   = { k: k.upper() for k in COLOURS }
       m = None if __name__ == "__main__" else sys.modules[__name__]
       failures, _tests = doctest.testmod(m, verbose = verbose)
   finally:
-    HOME, VLCCMD, prompt_yn = old
+    HOME, VLCCMD, prompt_yn, COLOURS = old
   return 0 if failures == 0 else 1
                                                                 # }}}1
 
-def do_list_dir_files(d, fs):
-  for state, f in dir_iter(d, fs):
-    o, t = ["["+INFOCHAR[state]+"]", f], db_t(fs, f)
+def do_something(f, d, args):
+  return f(d, db_load(d)["files"], *args)
+
+# === do_* ===
+
+def do_list_dir_files(d, fs):                                   # {{{1
+  for st, f in dir_iter(d, fs):
+    infochar = clr(INFOCOLOUR[st], INFOCHAR[st])
+    o, t     = ["["+infochar+"]", safe(f)], db_t(fs, f)
     if t: o.append(fmt_time(t))
     print(*o)
+                                                                # }}}1
 
 def do_list_dir_dirs(d, _fs):
-  for sd, pla, new in dir_iter_dirs(d):
-    p = "{:1}>".format(pla) if pla             else " "*2
-    n = "{:2}!".format(new) if new is not None else " "*3
-    print("(" + p + n + ")", sd)
+  for sd, p, n in dir_iter_dirs(d):
+    pl = _linfo(p, "playing", 1, p)
+    ne = _linfo(n, "new"    , 2, n is not None)
+    print("(" + pl + ne + ")", safe(sd))
+
+def _linfo(n, st, w, c):
+  if not c: return " "*(w+1)
+  return clr(INFOCOLOUR_L[st] if n else "whi", str(n).rjust(w)) + \
+         INFOCHAR_L[st]
 
 def do_list_dir_all(d, fs):
   do_list_dir_dirs(d, fs)
@@ -239,6 +292,8 @@ def do_kodi_import_playing(_d, _fs):
     data[p][name] = int(t)
   for d, fs in data.items(): db_update(d, fs)
 
+# === dir_* ===
+
 def dir_iter(d, fs = None):
   if fs is None: fs = db_load(d)["files"]
   info = { True: "done", -1: "skip" }
@@ -267,6 +322,8 @@ def dir_dirs(dirname):
 def dir_files(dirname):
   return sorted( x.name for x in dirname.iterdir()
                  if x.is_file() and x.suffix.lower() in EXTS )
+
+# === db_* ===
 
 # NB: files map to
 #   * True      (done)
@@ -307,19 +364,11 @@ def db_t(fs, f):
   t = fs.get(f)
   return None if t in [True, -1] else t
 
-# TODO
-def check_filename(d, f):                                       # {{{1
-  p = d / Path(f); r = p.relative_to(d)
-  if not p.is_file():
-    raise ValueError("'{}' is not a file".format(p))
-  if len(r.parts) != 1:
-    raise ValueError("'{}' is not a file in '{}'".format(p, d))
-  return p.name
-                                                                # }}}1
+# === playing & vlc ===
 
 def play_file(d, fs, f):
-  t = db_t(fs, f)
-  print("Playing", f, ("from "+fmt_time(t)+" " if t else "") + "...")
+  t = db_t(fs, f); etc = "from " + fmt_time(t) + " " if t else ""
+  print("Playing", safe(f), etc + "...")
   t_ = vlc_play(d, f, t)
   db_update(d, { f: t_ })
 
@@ -330,7 +379,7 @@ def play_file(d, fs, f):
 def vlc_play(d, f, t = None):                                   # {{{1
   t_  = max(0, t - CONT_BACK) if t else 0
   cmd = VLCCMD + (VLCCONT(t_) if t_ else []) + ["--", str(d / f)]
-  print("RUN", *cmd); subprocess.run(cmd, check = True)
+  print("RUN", *map(safe, cmd)); subprocess.run(cmd, check = True)
   t2  = vlc_get_times().get(str(d / f)) or True
   return False if t2 == True and not prompt_yn("Done") else t2
                                                                 # }}}1
@@ -354,11 +403,20 @@ def vlc_get_times():                                            # {{{1
     return dict(zip(l,t))
                                                                 # }}}1
 
+# === miscellaneous helpers ===
+
+# TODO
+def check_filename(d, f):                                       # {{{1
+  p = d / Path(f); r = p.relative_to(d)
+  if not p.is_file():
+    raise ValueError("'{}' is not a file".format(p))
+  if len(r.parts) != 1:
+    raise ValueError("'{}' is not a file in '{}'".format(p, d))
+  return p.name
+                                                                # }}}1
+
 def fmt_time(secs):
   return str(datetime.timedelta(seconds = secs))
-
-def do_something(f, d, args):
-  return f(d, db_load(d)["files"], *args)
 
 # NB: use $PWD instead of Path.cwd() since we might be in a symlinked
 # directory in the shell we've been run from.  We could follow the
@@ -367,6 +425,11 @@ def do_something(f, d, args):
 # should work for most cases, and prevent issues when moving the
 # symlink targets.  It's also consistent w/ kodi.
 def cwd(): return Path(os.environ["PWD"])
+
+def safe(s):
+  return "".join( c if c.isprintable() else "?" for c in s )
+
+# === kodi ===
 
 def kodi_query(sql):                                            # {{{1
   import sqlite3
@@ -401,11 +464,30 @@ select p.strPath || f.strFileName as fp, b.timeInSeconds
   order by fp;
 """
 
+# === colours ===
+
+COLOURS = dict(
+  non = "\033[0m"   , red = "\033[1;31m", grn = "\033[1;32m",
+  yll = "\033[1;33m", blu = "\033[1;34m", pur = "\033[1;35m",
+  cya = "\033[1;36m", whi = "\033[1;37m"
+)
+
+# NB: modified by --[no-]colour
+# TODO: make dynamically scoped somehow?
+USE_COLOUR = sys.stdout.isatty()
+
+def clr(c, s):
+  return COLOURS[c]+s+COLOURS["non"] if USE_COLOUR and c else s
+
+# === prompting ===
+
 if sys.version_info.major >= 3:
   def prompt(s): return input(s + "? ")
 
 def prompt_yn(s):
   return not prompt(s + " [Yn]").lower().startswith("n")
+
+# === entry point ===
 
 def main_():
   """Entry point for main program."""
