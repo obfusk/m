@@ -17,7 +17,17 @@
 r"""
 m - minimalistic media manager
 
->>> # NB: tests must be run from _test()!
+See README.md for a description and some examples.
+
+Examples
+========
+
+First, set up some test data
+----------------------------
+
+NB: tests must be run from _test()!  Otherwise the temporary directory
+and monkey-patching are not available.
+
 >>> if "TEST_DIR" not in globals():
 ...   raise KeyboardInterrupt("*** ABORT ***")
 
@@ -38,72 +48,93 @@ m - minimalistic media manager
 ...                      str(a): 246 }
 True
 
->>> def t_main(a, d = d, c = False):
+
+Now, run some examples
+----------------------
+
+NB: coloured output escapes are replaced by RED, NON etc. during test.
+
+>>> def run(a, d = d, c = False):
 ...   main("--colour" if c else "--no-colour", "-d", str(d), *a.split())
 
->>> t_main("ls")
+>>> run("ls")
 [ ] x.mkv
 [ ] y.mkv
 [ ] z.mkv
->>> t_main("mark x.mkv")
->>> t_main("skip y.mkv")
->>> t_main("ls")
+>>> run("mark x.mkv")
+>>> run("skip y.mkv")
+>>> run("ls")
 [x] x.mkv
 [*] y.mkv
 [ ] z.mkv
->>> t_main("next") # doctest: +ELLIPSIS
+>>> run("next") # doctest: +ELLIPSIS
 Playing z.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/z.mkv
->>> t_main("ls")
+>>> run("ls")
 [x] x.mkv
 [*] y.mkv
 [>] z.mkv 0:02:01
->>> t_main("ls", c = True)
+>>> run("ls", c = True)
 [GRNxNON] x.mkv
 [CYA*NON] y.mkv
 [RED>NON] z.mkv 0:02:01
->>> t_main("next") # doctest: +ELLIPSIS
+>>> run("next") # doctest: +ELLIPSIS
 Playing z.mkv from 0:02:01 ...
 RUN true vlc --fullscreen --play-and-exit --start-time 116 -- .../media/z.mkv
->>> t_main("play y.mkv") # doctest: +ELLIPSIS
+>>> run("play y.mkv") # doctest: +ELLIPSIS
 Playing y.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/y.mkv
->>> t_main("ls")
+>>> run("ls")
 [x] x.mkv
 [x] y.mkv
 [>] z.mkv 0:02:01
->>> t_main("mark z.mkv")
->>> t_main("next")
+>>> run("mark z.mkv")
+>>> run("next")
 No files to play.
->>> t_main("unmark x.mkv")
->>> t_main("unmark y.mkv")
->>> t_main("ls")
+>>> run("unmark x.mkv")
+>>> run("unmark y.mkv")
+>>> run("ls")
 [ ] x.mkv
 [ ] y.mkv
 [x] z.mkv
 
->>> t_main("ld")
+>>> run("ld")
 (     ) more
->>> t_main("index", d = d / "more")
->>> t_main("ld")
+>>> run("index", d = d / "more")
+>>> run("ld")
 (   2!) more
->>> t_main("ls", d = d / "more")
+>>> run("ls", d = d / "more")
 [ ] a.mkv
 [ ] b.mkv
->>> t_main("play a.mkv", d = d / "more") # doctest: +ELLIPSIS
+>>> run("play a.mkv", d = d / "more") # doctest: +ELLIPSIS
 Playing a.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
->>> t_main("mark b.mkv", d = d / "more")
->>> t_main("la")
+>>> run("mark b.mkv", d = d / "more")
+>>> run("la")
 (1> 0!) more
 [ ] x.mkv
 [ ] y.mkv
 [x] z.mkv
->>> t_main("ld", c = True)
+>>> run("ld", c = True)
 (RED1NON>WHI 0NON!) more
->>> t_main("unmark b.mkv", d = d / "more")
->>> t_main("ld", c = True)
+>>> run("unmark b.mkv", d = d / "more")
+>>> run("ld", c = True)
 (RED1NON>YLL 1NON!) more
+
+>>> (d / "un\033safe\x01file.mkv").touch()
+>>> (d / "unsafe\ndir").mkdir()
+
+>>> run("ls")
+[ ] un?safe?file.mkv
+[ ] x.mkv
+[ ] y.mkv
+[x] z.mkv
+>>> run("ld")
+(1> 1!) more
+(     ) unsafe?dir
+>>> run("play un\033safe\x01file.mkv") # doctest: +ELLIPSIS
+Playing un?safe?file.mkv ...
+RUN true vlc --fullscreen --play-and-exit -- .../media/un?safe?file.mkv
 """
                                                                 # }}}1
 
