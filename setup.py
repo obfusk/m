@@ -1,10 +1,15 @@
+from pathlib import Path
 from setuptools import setup
+
 import m
+
+long_description    = Path(__file__).with_name("README.rst").read_text()
 
 setup(
   name              = "mmm",
   url               = "https://github.com/obfusk/m",
   description       = "minimalistic media manager",
+  long_description  = long_description,
   version           = m.__version__,
   author            = "Felix C. Stegerman",
   author_email      = "flx@obfusk.net",

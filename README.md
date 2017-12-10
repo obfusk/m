@@ -59,7 +59,8 @@ $ m ld    # list dirs (shows #playing, #new for indexed subdirectories)
 ```
 
 Commands include: `list`/`ls`, `list-dirs`/`ld`, `list-all`/`la`,
-`next`, `play FILE`, `mark FILE`, `unmark FILE`, `skip FILE`, `index`.
+`next`, `play FILE`, `mark FILE`, `unmark FILE`, `skip FILE`, `index`,
+`playing`, `watched`, `skipped`.
 
 See also the tests in the source code for more examples.
 
@@ -78,6 +79,8 @@ $ pip3 install --user mmm   # for Debian; on other OS's you may need
 ## TODO
 
 * `ack TODO`
+* only use `safe()` when stdout is a tty?
+* bash completion?
 * more file extensions!
 * kodi db export/sync?
 * sign pypi package?

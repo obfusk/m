@@ -1,11 +1,9 @@
 *.pyc
 
-vlc-qt-interface.conf
-/test/home/.obfusk-m/*.json
-
 .coverage
 htmlcov
 
+/README.rst
 /build
 /dist
 /mmm.egg-info

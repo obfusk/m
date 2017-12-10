@@ -48,14 +48,22 @@ and monkey-patching are not available.
 ...                      str(a): 246 }
 True
 
+>>> import io
+>>> def run(a, d = d, c = False):
+...   main("--colour" if c else "--no-colour", "-d", str(d), *a.split())
+>>> def run_(*a, **k):
+...   stdout = sys.stdout; sys.stdout = f = io.StringIO()
+...   try:
+...     run(*a, **k)
+...   finally:
+...     sys.stdout = stdout
+...   return f.getvalue()
+
 
 Now, run some examples
 ----------------------
 
 NB: coloured output escapes are replaced by RED, NON etc. during test.
-
->>> def run(a, d = d, c = False):
-...   main("--colour" if c else "--no-colour", "-d", str(d), *a.split())
 
 >>> run("ls")
 [ ] x.mkv
@@ -88,13 +96,34 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/y.mkv
 [x] x.mkv
 [x] y.mkv
 [>] z.mkv 0:02:01
+
+>>> run("playing") # doctest: +ELLIPSIS
+/.../media:
+  z.mkv 0:02:01
+>>> run("playing --only-files") # doctest: +ELLIPSIS
+/.../media:
+  z.mkv
+>>> run("watched") # doctest: +ELLIPSIS
+/.../media:
+  x.mkv
+  y.mkv
+>>> run("watched --flat") # doctest: +ELLIPSIS
+/.../media/x.mkv
+/.../media/y.mkv
+>>> run("skip x.mkv")
+>>> run("skip y.mkv")
+>>> run_("skipped --zero") # doctest: +ELLIPSIS
+'/.../media/x.mkv\x00/.../media/y.mkv\x00'
+>>> run_("playing --zero") # doctest: +ELLIPSIS
+'/.../media/z.mkv 0:02:01\x00'
+>>> run_("playing --zero --only-files") # doctest: +ELLIPSIS
+'/.../media/z.mkv\x00'
 >>> run("mark z.mkv")
 >>> run("next")
 No files to play.
->>> run("unmark x.mkv")
 >>> run("unmark y.mkv")
 >>> run("ls")
-[ ] x.mkv
+[*] x.mkv
 [ ] y.mkv
 [x] z.mkv
 
@@ -112,7 +141,7 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 >>> run("mark b.mkv", d = d / "more")
 >>> run("la")
 (1> 0!) more
-[ ] x.mkv
+[*] x.mkv
 [ ] y.mkv
 [x] z.mkv
 >>> run("ld", c = True)
@@ -126,7 +155,7 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 
 >>> run("ls")
 [ ] un?safe?file.mkv
-[ ] x.mkv
+[*] x.mkv
 [ ] y.mkv
 [x] z.mkv
 >>> run("ld")
@@ -173,11 +202,10 @@ SKIP          = -1
 def main(*args):                                                # {{{1
   global USE_COLOUR
   p = _argument_parser(); n = p.parse_args(args)
-  a = [n.file] if hasattr(n, "file") else []
   if n.subcommand == "_test": return _test(n.verbose)
   if n.colour is not None: USE_COLOUR = n.colour
   dpath = cwd() / Path(n.dir) if n.dir else cwd()
-  return do_something(n.f, dpath, a) or 0
+  return do_something(n.f, dpath, n) or 0
                                                                 # }}}1
 
 def _argument_parser():                                         # {{{1
@@ -217,6 +245,12 @@ def _argument_parser():                                         # {{{1
                            help = "mark FILE as skip")
   p_index   = s.add_parser("index", aliases = ["i"],
                            help = "index current directory")
+  p_playing = s.add_parser("playing",
+                           help = "list files marked as playing")
+  p_watched = s.add_parser("watched",
+                           help = "list files marked as done")
+  p_skipped = s.add_parser("skipped",
+                           help = "list files marked as skip")
   p_kodi_w  = s.add_parser("kodi-import-watched",
                            help = "import watched data from kodi")
   p_kodi_p  = s.add_parser("kodi-import-playing",
@@ -234,11 +268,23 @@ def _argument_parser():                                         # {{{1
   p_unmark  .set_defaults(f = do_unmark_file)
   p_skip    .set_defaults(f = do_skip_file)
   p_index   .set_defaults(f = do_index_dir)
+  p_playing .set_defaults(f = do_playing_files)
+  p_watched .set_defaults(f = do_watched_files)
+  p_skipped .set_defaults(f = do_skipped_files)
   p_kodi_w  .set_defaults(f = do_kodi_import_watched)
   p_kodi_p  .set_defaults(f = do_kodi_import_playing)
 
   for x in [p_play, p_mark, p_unmark, p_skip]:
-    x.add_argument("file", metavar = "FILE")
+    x.add_argument("filename", metavar = "FILE")
+
+  for x in [p_playing, p_watched, p_skipped]:
+    x.add_argument("--flat", action = "store_true",
+      help = "flat list of files instead of grouped by directory")
+    x.add_argument("--zero", action = "store_true",
+      help = "zero-delimited (implies --flat) output "
+             "(for e.g. xargs -0)")
+  p_playing.add_argument("--only-files", action = "store_true",
+      help = "only print files, not times")
 
   return p
                                                                 # }}}1
@@ -262,8 +308,10 @@ def _test(verbose = False):                                     # {{{1
   return 0 if failures == 0 else 1
                                                                 # }}}1
 
-def do_something(f, dpath, args):
-  return f(dpath, db_load(dpath)["files"], *args)
+def do_something(f, dpath, ns):
+  kw = { k:v for k,v in vars(ns).items()
+         if k in "filename zero flat only_files".split() }
+  return f(dpath, db_load(dpath)["files"], **kw)
 
 # === do_* ===
 
@@ -315,6 +363,36 @@ def _fupd(dpath, filename, what):
 def do_index_dir(dpath, _fs):
   db_update(dpath, {})
 
+def do_playing_files(_dpath, _fs, flat, zero, only_files):
+  _print_files_with_state("playing", flat, zero, not only_files)
+
+def do_watched_files(_dpath, _fs, flat, zero):
+  _print_files_with_state("done", flat, zero)
+
+def do_skipped_files(_dpath, _fs, flat, zero):
+  _print_files_with_state("skip", flat, zero)
+
+def _print_files_with_state(st, flat, zero, w_t = False):       # {{{1
+  data = _files_with_state(st)
+  for dpath_s in sorted(data):
+    if not (flat or zero): print(safe(dpath_s) + ":")
+    for fn, what in sorted(data[dpath_s]):
+      x = str(Path(dpath_s) / fn) if flat or zero else "  " + fn
+      s = safe(x) if not zero else x
+      t = " " + fmt_time(what) if w_t else ""
+      print(s + t, end = "\0" if zero else "\n")
+                                                                # }}}1
+
+def _files_with_state(st):                                      # {{{1
+  data = defaultdict(list)
+  for df in (HOME / CFG).glob("dir__*.json"):
+    with df.open() as f:
+      db = json.load(f); dpath_s, fs = db["dir"], db["files"]
+      for fn, what in fs.items():
+        if _state_in_db(what) == st: data[dpath_s].append((fn, what))
+  return data
+                                                                # }}}1
+
 def do_kodi_import_watched(_dpath, _fs):
   data = defaultdict(dict)
   for p, name in kodi_path_query(KODI_WATCHED_SQL):
@@ -331,9 +409,13 @@ def do_kodi_import_playing(_dpath, _fs):
 
 def dir_iter(dpath, fs = None):
   if fs is None: fs = db_load(dpath)["files"]
-  info = { True: "done", SKIP: "skip" }
-  for fn in dir_files(dpath):
-    yield info.get(fs[fn], "playing") if fn in fs else "new", fn
+  for fn in dir_files(dpath): yield _state(fn, fs), fn
+
+def _state(fn, fs):
+  return _state_in_db(fs[fn]) if fn in fs else "new"
+
+def _state_in_db(what):
+  return { True: "done", SKIP: "skip" }.get(what, "playing")
 
 def dir_iter_dirs(dpath):                                       # {{{1
   for sd in dir_dirs(dpath):

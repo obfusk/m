@@ -16,11 +16,15 @@ coverage:
 	$(PY) -mcoverage html
 
 clean:
-	rm -fr .coverage build/ dist/ htmlcov/ $(PKG).egg-info/
+	rm -fr .coverage htmlcov/
+	rm -fr README.rst build/ dist/ $(PKG).egg-info/
 	find -name '*.pyc' -delete
 	find -name __pycache__ -delete
 
-package:
+%.rst: %.md
+	pandoc -o $@ $<
+
+package: README.rst
 	$(PY) setup.py sdist bdist_wheel
 
 publish: clean package
