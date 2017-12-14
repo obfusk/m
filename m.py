@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-10
+# Date        : 2017-12-14
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
 # Version     : v0.2.1
@@ -38,6 +38,9 @@ and monkey-patching are not available.
 >>> for _d in [d, d / "more", FAKE_HOME, FAKE_HOME / CFG]: _d.mkdir()
 >>> for _f in [x, y, z, a, b]: _f.touch()
 >>> (FAKE_HOME / VLCQT).parent.mkdir(parents = True)
+
+>>> (d / ".dotfile.mkv").touch()
+>>> (d / ".dotdir").mkdir()
 
 >>> _ = (FAKE_HOME / VLCQT).write_text('''
 ... [RecentsMRL]
