@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2017-12-10
+    Date        : 2017-12-14
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
     Version     : v0.2.1
@@ -63,6 +63,13 @@ Commands include: `list`/`ls`, `list-dirs`/`ld`, `list-all`/`la`,
 `playing`, `watched`, `skipped`.
 
 See also the tests in the source code for more examples.
+
+## Help
+
+```bash
+$ m --help      # global options & subcommands
+$ m ls --help   # subcommand (ls in this case) options & argument(s)
+```
 
 ## Installing
 

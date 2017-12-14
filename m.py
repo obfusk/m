@@ -246,56 +246,47 @@ def _argument_parser():                                         # {{{1
   s = p.add_subparsers(title = "subcommands", dest = "subcommand")
   s.required = True           # https://bugs.python.org/issue9253
 
-  p_list    = s.add_parser("list", aliases = "l ls".split(),
-                           help = "list files")
-  p_list_d  = s.add_parser("list-dirs", aliases = ["ld"],
-                           help = "list directories")
-  p_list_a  = s.add_parser("list-all", aliases = ["la"],
-                           help = "list directories & files")
-  p_next    = s.add_parser("next", aliases = ["n"],
-                           help = "play next file")
-  p_play    = s.add_parser("play", aliases = ["p"],
-                           help = "play FILE")
-  p_mark    = s.add_parser("mark", aliases = ["m"],
-                           help = "mark FILE as done")
-  p_unmark  = s.add_parser("unmark", aliases = ["u"],
-                           help = "mark FILE as new")
-  p_skip    = s.add_parser("skip", aliases = ["s"],
-                           help = "mark FILE as skip")
-  p_index   = s.add_parser("index", aliases = ["i"],
-                           help = "index current directory")
-  p_playing = s.add_parser("playing",
-                           help = "list files marked as playing")
-  p_watched = s.add_parser("watched",
-                           help = "list files marked as done")
-  p_skipped = s.add_parser("skipped",
-                           help = "list files marked as skip")
-  p_kodi_w  = s.add_parser("kodi-import-watched",
-                           help = "import watched data from kodi")
-  p_kodi_p  = s.add_parser("kodi-import-playing",
-                           help = "import playing data from kodi")
+  p_list    = _subcommand(s, "list l ls"    , "list files",
+                          do_list_dir_files)
+  p_list_d  = _subcommand(s, "list-dirs ld" , "list directories",
+                          do_list_dir_dirs)
+  p_list_a  = _subcommand(s, "list-all la",
+                          "list directories & files",
+                          do_list_dir_all)
+  p_next    = _subcommand(s, "next n"       , "play next file",
+                          do_play_next)
+  p_play    = _subcommand(s, "play p"       , "play FILE",
+                          do_play_file)
+  p_mark    = _subcommand(s, "mark m"       , "mark FILE as done",
+                          do_mark_file)
+  p_unmark  = _subcommand(s, "unmark u"     , "mark FILE as new",
+                          do_unmark_file)
+  p_skip    = _subcommand(s, "skip s"       , "mark FILE as skip",
+                          do_skip_file)
+  p_index   = _subcommand(s, "index i",
+                          "index current directory",
+                          do_index_dir)
+  p_playing = _subcommand(s, "playing",
+                          "list files marked as playing",
+                          do_playing_files)
+  p_watched = _subcommand(s, "watched",
+                          "list files marked as done",
+                          do_watched_files)
+  p_skipped = _subcommand(s, "skipped",
+                          "list files marked as skip",
+                          do_skipped_files)
+  p_kodi_w  = _subcommand(s, "kodi-import-watched",
+                          "import watched data from kodi",
+                          do_kodi_import_watched)
+  p_kodi_p  = _subcommand(s, "kodi-import-playing",
+                          "import playing data from kodi",
+                          do_kodi_import_playing)
 
   p_test    = s.add_parser("_test")
   p_test.add_argument("--verbose", "-v", action = "store_true")
 
-  p_list    .set_defaults(f = do_list_dir_files)
-  p_list_d  .set_defaults(f = do_list_dir_dirs)
-  p_list_a  .set_defaults(f = do_list_dir_all)
-  p_next    .set_defaults(f = do_play_next)
-  p_play    .set_defaults(f = do_play_file)
-  p_mark    .set_defaults(f = do_mark_file)
-  p_unmark  .set_defaults(f = do_unmark_file)
-  p_skip    .set_defaults(f = do_skip_file)
-  p_index   .set_defaults(f = do_index_dir)
-  p_playing .set_defaults(f = do_playing_files)
-  p_watched .set_defaults(f = do_watched_files)
-  p_skipped .set_defaults(f = do_skipped_files)
-  p_kodi_w  .set_defaults(f = do_kodi_import_watched)
-  p_kodi_p  .set_defaults(f = do_kodi_import_playing)
-
   for x in [p_play, p_mark, p_unmark, p_skip]:
     x.add_argument("filename", metavar = "FILE")
-
   for x in [p_playing, p_watched, p_skipped]:
     x.add_argument("--flat", action = "store_true",
       help = "flat list of files instead of grouped by directory")
@@ -305,6 +296,14 @@ def _argument_parser():                                         # {{{1
   p_playing.add_argument("--only-files", action = "store_true",
       help = "only print files, not times")
 
+  return p
+                                                                # }}}1
+
+def _subcommand(s, names, desc, f):                             # {{{1
+  name, *aliases = names.split()
+  p = s.add_parser(name, aliases = aliases, help = desc,
+                   description = desc)
+  p.set_defaults(f = f)
   return p
                                                                 # }}}1
 
