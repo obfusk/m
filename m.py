@@ -153,6 +153,15 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 >>> run("ld", c = True)
 (RED1NON>BLU 1NON!) more
 
+>>> run("--show-hidden ls")
+[ ] .dotfile.mkv
+[*] x.mkv
+[ ] y.mkv
+[x] z.mkv
+>>> run("--show-hidden ld")
+(     ) .dotdir
+(1> 1!) more
+
 >>> (d / "un\033safe\x01file.mkv").touch()
 >>> (d / "unsafe\ndir").mkdir()
 
@@ -179,7 +188,7 @@ __version__   = "0.2.1"
 
 DESC          = "m - minimalistic media manager"
 
-HOME          = Path.home()
+HOME          = Path.home()                                     # dyn
 CFG           = ".obfusk-m"                     # use git?! -> sync?!
 VLCQT         = ".config/vlc/vlc-qt-interface.conf"
 KODIDB        = ".kodi/userdata/Database/MyVideos107.db"
@@ -187,7 +196,7 @@ KODIDB        = ".kodi/userdata/Database/MyVideos107.db"
 EXTS          = ".avi .m4v .mkv .mp3 .mp4 .ogg .ogv".split()    # TODO
 CONT_BACK     = 5                                               # TODO
 
-VLCCMD        = "vlc --fullscreen --play-and-exit".split()
+VLCCMD        = "vlc --fullscreen --play-and-exit".split()      # dyn
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
 
 INFOS, INFOCH = "skip done playing new".split(), "*x> "
@@ -199,22 +208,20 @@ INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
 
 SKIP          = -1
 
-# NB: modified by --[no-]colour
-# TODO: make dynamically scoped somehow?
-USE_COLOUR    = sys.stdout.isatty()
-
-SHOW_HIDDEN   = False
+USE_COLOUR    = sys.stdout.isatty()   # NB: dyn by --[no-]colour
+SHOW_HIDDEN   = False                 # NB: dyn by --show-hidden
 
 # === main & related functions ===
 
-# NB: sets USE_COLOUR
+# NB: dyn USE_COLOUR, SHOW_HIDDEN
+# TODO: use threading.local?
 def main(*args):                                                # {{{1
-  global USE_COLOUR
   p = _argument_parser(); n = p.parse_args(args)
+  c = n.colour if n.colour is not None else USE_COLOUR
   if n.subcommand == "_test": return _test(n.verbose)
-  if n.colour is not None: USE_COLOUR = n.colour
-  dpath = cwd() / Path(n.dir) if n.dir else cwd()
-  return do_something(n.f, dpath, n) or 0
+  with dyn(globals(), USE_COLOUR = c, SHOW_HIDDEN = n.show_hidden):
+    dpath = cwd() / Path(n.dir) if n.dir else cwd()
+    return do_something(n.f, dpath, n) or 0
                                                                 # }}}1
 
 def _argument_parser():                                         # {{{1
@@ -223,6 +230,9 @@ def _argument_parser():                                         # {{{1
                  version = "%(prog)s {}".format(__version__))
   p.add_argument("--dir", "-d", metavar = "DIR",
                  help = "use DIR instead of $PWD")
+  p.add_argument("--show-hidden", action = "store_true",
+                 help = "show hidden (i.e. starting with .) "
+                        "files & dirs")
 
   g = p.add_mutually_exclusive_group()
   p.set_defaults(colour = None)
@@ -298,23 +308,18 @@ def _argument_parser():                                         # {{{1
   return p
                                                                 # }}}1
 
-# NB: monkey-patches HOME, VLCCMD, prompt_yn, COLOURS!
+# NB: dyn HOME, VLCCMD, prompt_yn, COLOURS
 def _test(verbose = False):                                     # {{{1
+  global TEST_DIR, FAKE_HOME
   import doctest, tempfile
-  global FAKE_HOME, TEST_DIR, HOME, VLCCMD, prompt_yn, COLOURS
-  old = HOME, VLCCMD, prompt_yn, COLOURS
-  try:
-    with tempfile.TemporaryDirectory() as tdir:
-      TEST_DIR  = Path(tdir)
-      FAKE_HOME = HOME = TEST_DIR / "home"
-      VLCCMD    = ["true"] + VLCCMD
-      prompt_yn = lambda _: True
-      COLOURS   = { k: k.upper() for k in COLOURS }
-      m = None if __name__ == "__main__" else sys.modules[__name__]
+  m = None if __name__ == "__main__" else sys.modules[__name__]
+  with tempfile.TemporaryDirectory() as tdir:
+    TEST_DIR = Path(tdir); FAKE_HOME = TEST_DIR / "home"
+    with dyn(globals(), HOME = FAKE_HOME, VLCCMD = ["true"] + VLCCMD,
+             prompt_yn = lambda _: True,
+             COLOURS   = { k:k.upper() for k in COLOURS }):
       failures, _tests = doctest.testmod(m, verbose = verbose)
-  finally:
-    HOME, VLCCMD, prompt_yn, COLOURS = old
-  return 0 if failures == 0 else 1
+      return 0 if failures == 0 else 1
                                                                 # }}}1
 
 def do_something(f, dpath, ns):
@@ -596,7 +601,7 @@ select p.strPath || f.strFileName as fp, b.timeInSeconds
 
 # === colours ===
 
-COLOURS = dict(
+COLOURS = dict(                                                 # dyn
   non = "\033[0m"   , red = "\033[0;31m", grn = "\033[0;32m",
   yll = "\033[1;33m", blu = "\033[0;34m", pur = "\033[0;35m",
   cya = "\033[0;36m", whi = "\033[1;37m"
@@ -610,8 +615,40 @@ def clr(c, s):
 if sys.version_info.major >= 3:
   def prompt(s): return input(s + "? ")
 
-def prompt_yn(s):
+def prompt_yn(s):                                               # dyn
   return not prompt(s + " [Yn]").lower().startswith("n")
+
+# === dynamic vars ===
+
+import contextlib
+
+@contextlib.contextmanager
+def dyn(d, **kw):                                               # {{{1
+  """
+  Pseudo-dynamic variables.
+
+  >>> SOME_VAR = 42
+  >>> with dyn(vars(), SOME_VAR = 37): SOME_VAR
+  37
+  >>> SOME_VAR
+  42
+
+  >>> import threading
+  >>> D = threading.local()
+  >>> D.x, D.y = 1, 2
+  >>> with dyn(vars(D), x = 3, y = 4): (D.x, D.y)
+  (3, 4)
+  >>> (D.x, D.y)
+  (1, 2)
+  """
+
+  old = { k:d[k] for k in kw }
+  try:
+    d.update(kw)
+    yield
+  finally:
+    d.update(old)
+                                                                # }}}1
 
 # === entry point ===
 
