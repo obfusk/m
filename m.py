@@ -199,6 +199,12 @@ INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
 
 SKIP          = -1
 
+# NB: modified by --[no-]colour
+# TODO: make dynamically scoped somehow?
+USE_COLOUR    = sys.stdout.isatty()
+
+SHOW_HIDDEN   = False
+
 # === main & related functions ===
 
 # NB: sets USE_COLOUR
@@ -437,11 +443,15 @@ def dir_next(dpath, fs):
   return None
 
 def dir_dirs(dpath):
-  return sorted( x.name for x in dpath.iterdir() if x.is_dir() )
+  return sorted( x.name for x in _iterdir(dpath) if x.is_dir() )
 
 def dir_files(dpath):
-  return sorted( x.name for x in dpath.iterdir()
+  return sorted( x.name for x in _iterdir(dpath)
                  if x.is_file() and x.suffix.lower() in EXTS )
+
+def _iterdir(dpath):
+  return ( x for x in dpath.iterdir()
+           if SHOW_HIDDEN or not x.name.startswith(".") )
 
 # === db_* ===
 
@@ -591,10 +601,6 @@ COLOURS = dict(
   yll = "\033[1;33m", blu = "\033[0;34m", pur = "\033[0;35m",
   cya = "\033[0;36m", whi = "\033[1;37m"
 )
-
-# NB: modified by --[no-]colour
-# TODO: make dynamically scoped somehow?
-USE_COLOUR = sys.stdout.isatty()
 
 def clr(c, s):
   return COLOURS[c]+s+COLOURS["non"] if USE_COLOUR and c else s
