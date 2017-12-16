@@ -54,12 +54,17 @@ True
 >>> import io
 >>> def run(a, d = d, c = False):
 ...   main("--colour" if c else "--no-colour", "-d", str(d), *a.split())
->>> def run_(*a, **k):
+>>> def runO(*a, **k):
 ...   f = io.StringIO()
 ...   with contextlib.redirect_stdout(f): run(*a, **k)
 ...   return f.getvalue()
->>> def run2(*a, **k):
+>>> def runE(*a, **k):
 ...   with contextlib.redirect_stderr(sys.stdout): run(*a, **k)
+>>> def runH(*a, **k):
+...   argv0 = sys.argv[0]; sys.argv[0] = "m"
+...   try: run(*a, **k)
+...   except SystemExit: pass
+...   finally: sys.argv[0] = argv0
 
 
 Now, run some examples
@@ -71,8 +76,8 @@ NB: coloured output escapes are replaced by RED, NON etc. during test.
 [ ] x.mkv
 [ ] y.mkv
 [ ] z.mkv
->>> run("mark x.mkv")
->>> run("skip y.mkv")
+>>> runE("mark x.mkv")
+>>> runE("skip y.mkv")
 >>> run("ls")
 [x] x.mkv
 [*] y.mkv
@@ -99,6 +104,35 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/y.mkv
 [x] y.mkv
 [>] z.mkv 0:02:01
 
+>>> run("ls --numbers")
+  1 [x] x.mkv
+  2 [x] y.mkv
+  3 [>] z.mkv 0:02:01
+>>> runE("unmark 1-2")
+>>> run("ls -n")
+  1 [ ] x.mkv
+  2 [ ] y.mkv
+  3 [>] z.mkv 0:02:01
+>>> runE("skip all")
+>>> run("ls -n")
+  1 [*] x.mkv
+  2 [*] y.mkv
+  3 [*] z.mkv
+>>> runE("mark 1,3")
+>>> run("ls -n")
+  1 [x] x.mkv
+  2 [*] y.mkv
+  3 [x] z.mkv
+>>> runE("mark 4")
+Error: out of range: '4'
+>>> runE("mark oops")
+Error: not a valid file name or number: 'oops'
+>>> run("play 2,3") # doctest: +ELLIPSIS
+Playing y.mkv ...
+RUN true vlc --fullscreen --play-and-exit -- .../media/y.mkv
+Playing z.mkv ...
+RUN true vlc --fullscreen --play-and-exit -- .../media/z.mkv
+
 >>> run("playing") # doctest: +ELLIPSIS
 /.../media:
   z.mkv 0:02:01
@@ -112,18 +146,18 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/y.mkv
 >>> run("watched --flat") # doctest: +ELLIPSIS
 /.../media/x.mkv
 /.../media/y.mkv
->>> run("skip x.mkv")
->>> run("skip y.mkv")
->>> run_("skipped --zero") # doctest: +ELLIPSIS
+>>> runE("skip x.mkv")
+>>> runE("skip y.mkv")
+>>> runO("skipped --zero") # doctest: +ELLIPSIS
 '/.../media/x.mkv\x00/.../media/y.mkv\x00'
->>> run_("playing --zero") # doctest: +ELLIPSIS
+>>> runO("playing --zero") # doctest: +ELLIPSIS
 '/.../media/z.mkv 0:02:01\x00'
->>> run_("playing --zero --only-files") # doctest: +ELLIPSIS
+>>> runO("playing --zero --only-files") # doctest: +ELLIPSIS
 '/.../media/z.mkv\x00'
->>> run("mark z.mkv")
+>>> runE("mark z.mkv")
 >>> run("next")
 No files to play.
->>> run("unmark y.mkv")
+>>> runE("unmark y.mkv")
 >>> run("ls")
 [*] x.mkv
 [ ] y.mkv
@@ -131,7 +165,7 @@ No files to play.
 
 >>> run("ld")
 (     ) more
->>> run("index", d = d / "more")
+>>> runE("index", d = d / "more")
 >>> run("ld")
 (   2!) more
 >>> run("ls", d = d / "more")
@@ -140,7 +174,7 @@ No files to play.
 >>> run("play a.mkv", d = d / "more") # doctest: +ELLIPSIS
 Playing a.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
->>> run("mark b.mkv", d = d / "more")
+>>> runE("mark b.mkv", d = d / "more")
 >>> run("la")
 (1> 0!) more
 [*] x.mkv
@@ -148,7 +182,7 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 [x] z.mkv
 >>> run("ld", c = True)
 (RED1NON>YLL 0NON!) more
->>> run("unmark b.mkv", d = d / "more")
+>>> runE("unmark b.mkv", d = d / "more")
 >>> run("ld", c = True)
 (RED1NON>BLU 1NON!) more
 
@@ -176,20 +210,88 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 Playing un?safe?file.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/un?safe?file.mkv
 
->>> run2("mark /foo/bar/baz.mkv") # doctest: +ELLIPSIS
+>>> runE("mark /foo/bar/baz.mkv") # doctest: +ELLIPSIS
 Error: '/foo/bar/baz.mkv' does not start with '/.../media'
->>> run2("mark nonexistent.mkv") # doctest: +ELLIPSIS
+>>> runE("mark nonexistent.mkv") # doctest: +ELLIPSIS
 Error: '/.../nonexistent.mkv' is not a file
->>> run2("unmark nonexistent.mkv")
->>> run2("mark more/a.mkv") # doctest: +ELLIPSIS
+>>> runE("unmark nonexistent.mkv")
+Ignoring unknown file 'nonexistent.mkv'.
+>>> runE("mark more/a.mkv") # doctest: +ELLIPSIS
 Error: '/.../more/a.mkv' is not a file in '/.../media'
->>> run2("unmark foo/bar.mkv") # doctest: +ELLIPSIS
+>>> runE("unmark foo/bar.mkv") # doctest: +ELLIPSIS
 Error: '/.../bar.mkv' is not a file in '/.../media'
+
+>>> run("db-file") # doctest: +ELLIPSIS
+/.../home/.obfusk-m/dir__...|media__....json
+
+>>> runH("--help") # doctest: +ELLIPSIS
+usage: m [-h] [--version] [--dir DIR] [--show-hidden] [--colour | --no-colour]
+         {list,l,ls,...}
+         ...
+<BLANKLINE>
+m - minimalistic media manager
+<BLANKLINE>
+optional arguments:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+  --dir DIR, -d DIR     use DIR instead of $PWD
+  --show-hidden         show hidden (i.e. starting with .) files & dirs
+  --colour              use coloured output (the default when stdout is a tty)
+  --no-colour, --nocolour
+                        do not use coloured output
+<BLANKLINE>
+subcommands:
+  {list,l,ls,...,_test}
+    list (l, ls)        list files
+    list-dirs (ld)      list directories
+    list-all (la)       list directories & files
+    next (n)            play next file
+    play (p)            play FILE
+    mark (m)            mark FILE as done
+    unmark (u)          mark FILE as new
+    skip (s)            mark FILE as skip
+    index (i)           index current directory
+    playing             list files marked as playing
+    watched             list files marked as done
+    skipped             list files marked as skip
+    db-file             print path to DB file
+    kodi-import-watched
+                        import watched data from kodi
+    kodi-import-playing
+                        import playing data from kodi
+>>> runH("ls --help")
+usage: m list [-h] [--numbers]
+<BLANKLINE>
+list files
+<BLANKLINE>
+optional arguments:
+  -h, --help     show this help message and exit
+  --numbers, -n  show numbers (which can be used for mark etc.)
+>>> runH("p --help")
+usage: m play [-h] FILE
+<BLANKLINE>
+play FILE
+<BLANKLINE>
+positional arguments:
+  FILE
+<BLANKLINE>
+optional arguments:
+  -h, --help  show this help message and exit
+>>> runH("playing --help")
+usage: m playing [-h] [--flat] [--zero] [--only-files]
+<BLANKLINE>
+list files marked as playing
+<BLANKLINE>
+optional arguments:
+  -h, --help    show this help message and exit
+  --flat        flat list of files instead of grouped by directory
+  --zero        zero-delimited (implies --flat) output (for e.g. xargs -0)
+  --only-files  only print files, not times
 """
                                                                 # }}}1
 
-import argparse, contextlib, datetime, hashlib, json, os, subprocess,\
-       sys, urllib
+import argparse, contextlib, datetime, hashlib, json, os, re, \
+       subprocess, sys, urllib
 
 from collections import defaultdict
 from pathlib import Path
@@ -269,28 +371,27 @@ def _argument_parser():                                         # {{{1
   p_list_a  = _subcommand(s, "list-all la",
                           "list directories & files",
                           do_list_dir_all)
-  p_next    = _subcommand(s, "next n"       , "play next file",
+  p_next    = _subcommand(s, "next n"   , "play next file",
                           do_play_next)
-  p_play    = _subcommand(s, "play p"       , "play FILE",
+  p_play    = _subcommand(s, "play p"   , "play FILE",
                           do_play_file)
-  p_mark    = _subcommand(s, "mark m"       , "mark FILE as done",
+  p_mark    = _subcommand(s, "mark m"   , "mark FILE as done",
                           do_mark_file)
-  p_unmark  = _subcommand(s, "unmark u"     , "mark FILE as new",
+  p_unmark  = _subcommand(s, "unmark u" , "mark FILE as new",
                           do_unmark_file)
-  p_skip    = _subcommand(s, "skip s"       , "mark FILE as skip",
+  p_skip    = _subcommand(s, "skip s"   , "mark FILE as skip",
                           do_skip_file)
   p_index   = _subcommand(s, "index i",
                           "index current directory",
                           do_index_dir)
-  p_playing = _subcommand(s, "playing",
-                          "list files marked as playing",
+  p_playing = _subcommand(s, "playing", "list files marked as playing",
                           do_playing_files)
-  p_watched = _subcommand(s, "watched",
-                          "list files marked as done",
+  p_watched = _subcommand(s, "watched", "list files marked as done",
                           do_watched_files)
-  p_skipped = _subcommand(s, "skipped",
-                          "list files marked as skip",
+  p_skipped = _subcommand(s, "skipped", "list files marked as skip",
                           do_skipped_files)
+  p_dbfile  = _subcommand(s, "db-file", "print path to DB file",
+                          do_dbfile)
   p_kodi_w  = _subcommand(s, "kodi-import-watched",
                           "import watched data from kodi",
                           do_kodi_import_watched)
@@ -301,6 +402,9 @@ def _argument_parser():                                         # {{{1
   p_test    = s.add_parser("_test")
   p_test.add_argument("--verbose", "-v", action = "store_true")
 
+  for x in [p_list, p_list_a]:
+    x.add_argument("--numbers", "-n", action = "store_true",
+      help = "show numbers (which can be used for mark etc.)")
   for x in [p_play, p_mark, p_unmark, p_skip]:
     x.add_argument("filename", metavar = "FILE")
   for x in [p_playing, p_watched, p_skipped]:
@@ -337,18 +441,20 @@ def _test(verbose = False):                                     # {{{1
       return 0 if failures == 0 else 1
                                                                 # }}}1
 
+DO_ARGS = "numbers filename flat zero only_files".split()
+
 def do_something(f, dpath, ns):
-  kw = { k:v for k,v in vars(ns).items()
-         if k in "filename zero flat only_files".split() }
+  kw = { k:v for k,v in vars(ns).items() if k in DO_ARGS }
   return f(dpath, db_load(dpath)["files"], **kw)
 
 # === do_* ===
 
-def do_list_dir_files(dpath, fs):                               # {{{1
-  for st, fn in dir_iter(dpath, fs):
+def do_list_dir_files(dpath, fs, numbers):                      # {{{1
+  for i, (st, fn) in enumerate(dir_iter(dpath, fs)):
     infochar = clr(INFOCOLOUR[st], INFOCHAR[st])
     o, t     = ["["+infochar+"]", safe(fn)], db_t(fs, fn)
-    if t: o.append(fmt_time(t))
+    if numbers: o = ["{:3d}".format(i+1)] + o
+    if t      : o = o + [fmt_time(t)]
     print(*o)
                                                                 # }}}1
 
@@ -363,9 +469,9 @@ def _linfo(n, st, w, c):
   return clr(INFOCOLOUR_L[st] if n else "yll", str(n).rjust(w)) + \
          INFOCHAR_L[st]
 
-def do_list_dir_all(dpath, fs):
-  do_list_dir_dirs(dpath, fs)
-  do_list_dir_files(dpath, fs)
+def do_list_dir_all(dpath, fs, numbers):
+  do_list_dir_dirs (dpath, fs)
+  do_list_dir_files(dpath, fs, numbers)
 
 def do_play_next(dpath, fs):
   fn = dir_next(dpath, fs)
@@ -373,21 +479,43 @@ def do_play_next(dpath, fs):
   else: print("No files to play.")
 
 def do_play_file(dpath, fs, filename):
-  fn = check_filename(dpath, filename)
-  play_file(dpath, fs, fn)
+  for fn in _files_from_spec(dpath, filename):
+    play_file(dpath, fs, fn)
 
 def do_mark_file(dpath, _fs, filename):
-  _fupd(dpath, filename, True)
+  files = _files_from_spec(dpath, filename)
+  db_update(dpath, { fn: True for fn in files })
 
-def do_unmark_file(dpath, _fs, filename):
-  _fupd(dpath, filename, False, False)
+def do_unmark_file(dpath, fs, filename):                        # {{{1
+  files   = _files_from_spec(dpath, filename, False)
+  files_  = [ fn for fn in files if fn in fs ]
+  for fn in sorted(set(files) - set(files_)):
+    print("Ignoring unknown file '{}'.".format(fn), file = sys.stderr)
+  db_update(dpath, { fn: False for fn in files_ })
+                                                                # }}}1
 
 def do_skip_file(dpath, _fs, filename):
-  _fupd(dpath, filename, SKIP)
+  files = _files_from_spec(dpath, filename)
+  db_update(dpath, { fn: SKIP for fn in files })
 
-def _fupd(dpath, filename, what, must_exist = True):
-  fn = check_filename(dpath, filename, must_exist)
-  db_update(dpath, { fn: what })
+def _files_from_spec(dpath, spec, must_exist = True):           # {{{1
+  if any( spec.endswith(ext) for ext in EXTS ):
+    return [check_filename(dpath, spec, must_exist)]
+  elif re.fullmatch("all|(\d+(-\d+)?,)*(\d+(-\d+)?)", spec):
+    files = dir_files(dpath)
+    if spec == "all": return files
+    else:
+      ret = set()
+      for pt in spec.split(","):
+        a, b = map(int, pt.split("-") if "-" in pt else [pt, pt])
+        for x in [a, b]:
+          if not 1 <= x <= len(files):
+            raise MError("out of range: '{}'".format(x))
+        ret |= set(files[a-1:b])
+      return sorted(ret)
+  else:
+    raise MError("not a valid file name or number: '{}'".format(spec))
+                                                                # }}}1
 
 def do_index_dir(dpath, _fs):
   db_update(dpath, {})
@@ -421,6 +549,9 @@ def _files_with_state(st):                                      # {{{1
         if _state_in_db(what) == st: data[dpath_s].append((fn, what))
   return data
                                                                 # }}}1
+
+def do_dbfile(dpath, _fs):
+  print(db_dir_file(dpath))
 
 def do_kodi_import_watched(_dpath, _fs):
   data = defaultdict(dict)

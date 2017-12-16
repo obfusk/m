@@ -87,8 +87,6 @@ $ pip3 install --user mmm   # for Debian; on other OS's you may need
 
 * update version + package!
 * `ack TODO`
-* `m --numbers/-n` + `m mark 1-12,17` + `m mark all`
-* `m db-file`?
 * `m --virtual foo/bar {ls,...}` + `m virt [--update] [--title]*
   [--url]* [--url-template] [--episodes] [--browser]` +
   `VIRTUAL:/foo/bar` + `virt__*.json` + `m {watching,...}
