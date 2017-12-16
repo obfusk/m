@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-14
+# Date        : 2017-12-16
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
 # Version     : v0.2.1
@@ -55,12 +55,11 @@ True
 >>> def run(a, d = d, c = False):
 ...   main("--colour" if c else "--no-colour", "-d", str(d), *a.split())
 >>> def run_(*a, **k):
-...   stdout = sys.stdout; sys.stdout = f = io.StringIO()
-...   try:
-...     run(*a, **k)
-...   finally:
-...     sys.stdout = stdout
+...   f = io.StringIO()
+...   with contextlib.redirect_stdout(f): run(*a, **k)
 ...   return f.getvalue()
+>>> def run2(*a, **k):
+...   with contextlib.redirect_stderr(sys.stdout): run(*a, **k)
 
 
 Now, run some examples
@@ -176,10 +175,21 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 >>> run("play un\033safe\x01file.mkv") # doctest: +ELLIPSIS
 Playing un?safe?file.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/un?safe?file.mkv
+
+>>> run2("mark /foo/bar/baz.mkv") # doctest: +ELLIPSIS
+Error: '/foo/bar/baz.mkv' does not start with '/.../media'
+>>> run2("mark nonexistent.mkv") # doctest: +ELLIPSIS
+Error: '/.../nonexistent.mkv' is not a file
+>>> run2("unmark nonexistent.mkv")
+>>> run2("mark more/a.mkv") # doctest: +ELLIPSIS
+Error: '/.../more/a.mkv' is not a file in '/.../media'
+>>> run2("unmark foo/bar.mkv") # doctest: +ELLIPSIS
+Error: '/.../bar.mkv' is not a file in '/.../media'
 """
                                                                 # }}}1
 
-import argparse, datetime, hashlib, json, os, subprocess, sys, urllib
+import argparse, contextlib, datetime, hashlib, json, os, subprocess,\
+       sys, urllib
 
 from collections import defaultdict
 from pathlib import Path
@@ -211,6 +221,8 @@ SKIP          = -1
 USE_COLOUR    = sys.stdout.isatty()   # NB: dyn by --[no-]colour
 SHOW_HIDDEN   = False                 # NB: dyn by --show-hidden
 
+class MError(RuntimeError): pass
+
 # === main & related functions ===
 
 # NB: dyn USE_COLOUR, SHOW_HIDDEN
@@ -221,7 +233,11 @@ def main(*args):                                                # {{{1
   if n.subcommand == "_test": return _test(n.verbose)
   with dyn(globals(), USE_COLOUR = c, SHOW_HIDDEN = n.show_hidden):
     dpath = cwd() / Path(n.dir) if n.dir else cwd()
-    return do_something(n.f, dpath, n) or 0
+    try:
+      return do_something(n.f, dpath, n) or 0
+    except MError as e:
+      print("Error:", *e.args, file = sys.stderr)
+      return 1
                                                                 # }}}1
 
 def _argument_parser():                                         # {{{1
@@ -364,13 +380,13 @@ def do_mark_file(dpath, _fs, filename):
   _fupd(dpath, filename, True)
 
 def do_unmark_file(dpath, _fs, filename):
-  _fupd(dpath, filename, False)
+  _fupd(dpath, filename, False, False)
 
 def do_skip_file(dpath, _fs, filename):
   _fupd(dpath, filename, SKIP)
 
-def _fupd(dpath, filename, what):
-  fn = check_filename(dpath, filename)
+def _fupd(dpath, filename, what, must_exist = True):
+  fn = check_filename(dpath, filename, must_exist)
   db_update(dpath, { fn: what })
 
 def do_index_dir(dpath, _fs):
@@ -540,12 +556,16 @@ def vlc_get_times():                                            # {{{1
 # === miscellaneous helpers ===
 
 # TODO
-def check_filename(dpath, fn):                                  # {{{1
-  p = dpath / Path(fn); r = p.relative_to(dpath)
-  if not p.is_file():
-    raise ValueError("'{}' is not a file".format(p))
+def check_filename(dpath, fn, must_exist = True):               # {{{1
+  p = dpath / Path(fn)
+  try:
+    r = p.relative_to(dpath)
+  except ValueError as e:
+    raise MError(*e.args)
   if len(r.parts) != 1:
-    raise ValueError("'{}' is not a file in '{}'".format(p, dpath))
+    raise MError("'{}' is not a file in '{}'".format(p, dpath))
+  if (must_exist or p.exists()) and not p.is_file():
+    raise MError("'{}' is not a file".format(p))
   return p.name
                                                                 # }}}1
 
@@ -618,8 +638,6 @@ def prompt_yn(s):                                               # dyn
   return not prompt(s + " [Yn]").lower().startswith("n")
 
 # === dynamic vars ===
-
-import contextlib
 
 @contextlib.contextmanager
 def dyn(d, **kw):                                               # {{{1

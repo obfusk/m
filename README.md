@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2017-12-14
+    Date        : 2017-12-16
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
     Version     : v0.2.1
@@ -85,11 +85,29 @@ $ pip3 install --user mmm   # for Debian; on other OS's you may need
 
 ## TODO
 
+* update version + package!
 * `ack TODO`
+* `m --numbers/-n` + `m mark 1-12,17` + `m mark all`
+* `m db-file`?
+* `m --virtual foo/bar {ls,...}` + `m virt [--update] [--title]*
+  [--url]* [--url-template] [--episodes] [--browser]` +
+  `VIRTUAL:/foo/bar` + `virt__*.json` + `m {watching,...}
+  --include-virtual`?
+* `m import-{playing,watched} [--zero]`?
+* `m kodi-*-sql`?
+* `m kodi-import-* [--replace] [--include] [--exclude]`?
 * only use `safe()` when stdout is a tty?
-* bash completion?
+* document `safe()` vs `--zero`
 * more file extensions!
+
+<!-- -->
+
+* bash completion?
+* `~/.obfusk-m/config.json`? + `--no-*`
+* mpv support?
+* `m mv`?
 * `--tree` for `playing` etc.?
+* `--json`?
 * kodi db export/sync?
 * sign pypi package?
 
