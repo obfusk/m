@@ -42,11 +42,7 @@ and monkey-patching are not available.
 >>> (d / ".dotfile.mkv").touch()
 >>> (d / ".dotdir").mkdir()
 
->>> _ = (FAKE_HOME / VLCQT).write_text('''
-... [RecentsMRL]
-... list=file://{}, file://{}, file://{}, file://{}
-... times=0, 0, 121666, 246135
-... '''.format(x, y, z, a))
+>>> _ = (FAKE_HOME / VLCQT).write_text(_VLC_TEST_CFG.format(x, y, z, a))
 >>> vlc_get_times() == { str(x): 0, str(y): 0, str(z): 121,
 ...                      str(a): 246 }
 True
@@ -186,14 +182,28 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 >>> run("ld", c = True)
 (RED1NON>BLU 1NON!) more
 
->>> run("--show-hidden ls")
-[ ] .dotfile.mkv
-[*] x.mkv
-[ ] y.mkv
-[x] z.mkv
+>>> run("--show-hidden ls -n")
+  1 [ ] .dotfile.mkv
+  2 [*] x.mkv
+  3 [ ] y.mkv
+  4 [x] z.mkv
 >>> run("--show-hidden ld")
 (     ) .dotdir
 (1> 1!) more
+
+>>> run("next --mpv") # doctest: +ELLIPSIS
+Playing y.mkv ...
+RUN true mpv --fullscreen -- .../media/y.mkv
+>>> run("next --mpv") # doctest: +ELLIPSIS
+Playing y.mkv from 0:01:01 ...
+RUN true mpv --fullscreen --start=56 -- .../media/y.mkv
+>>> run("ls")
+[*] x.mkv
+[>] y.mkv 0:01:01
+[x] z.mkv
+>>> run("next") # doctest: +ELLIPSIS
+Playing y.mkv from 0:01:01 ...
+RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 
 >>> (d / "un\033safe\x01file.mkv").touch()
 >>> (d / "unsafe\ndir").mkdir()
@@ -201,7 +211,7 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 >>> run("ls")
 [ ] un?safe?file.mkv
 [*] x.mkv
-[ ] y.mkv
+[x] y.mkv
 [x] z.mkv
 >>> run("ld")
 (1> 1!) more
@@ -268,7 +278,7 @@ optional arguments:
   -h, --help     show this help message and exit
   --numbers, -n  show numbers (which can be used for mark etc.)
 >>> runH("p --help")
-usage: m play [-h] FILE
+usage: m play [-h] [--mpv] FILE
 <BLANKLINE>
 play FILE
 <BLANKLINE>
@@ -277,6 +287,7 @@ positional arguments:
 <BLANKLINE>
 optional arguments:
   -h, --help  show this help message and exit
+  --mpv       use mpv instead of vlc
 >>> runH("playing --help")
 usage: m playing [-h] [--flat] [--zero] [--only-files]
 <BLANKLINE>
@@ -287,10 +298,32 @@ optional arguments:
   --flat        flat list of files instead of grouped by directory
   --zero        zero-delimited (implies --flat) output (for e.g. xargs -0)
   --only-files  only print files, not times
+
+>>> VLCCMD[0] = "false"
+>>> runE("play x.mkv") # doctest: +ELLIPSIS
+Playing x.mkv ...
+RUN false vlc --fullscreen --play-and-exit -- .../media/x.mkv
+Error: could not play file 'x.mkv': Command ... returned non-zero exit status 1.
+>>> VLCCMD[0] = "does-not-exist"
+>>> runE("play x.mkv") # doctest: +ELLIPSIS
+Playing x.mkv ...
+RUN does-not-exist vlc --fullscreen --play-and-exit -- .../media/x.mkv
+Error: could not play file 'x.mkv': No such file or directory: 'does-not-exist'
+
+>>> MPVCMD[0] = "false"
+>>> runE("play --mpv x.mkv") # doctest: +ELLIPSIS
+Playing x.mkv ...
+RUN false mpv --fullscreen -- .../media/x.mkv
+Error: could not play file 'x.mkv': Command ... returned non-zero exit status 1.
+>>> MPVCMD[0] = "does-not-exist"
+>>> runE("play --mpv x.mkv") # doctest: +ELLIPSIS
+Playing x.mkv ...
+RUN does-not-exist mpv --fullscreen -- .../media/x.mkv
+Error: could not play file 'x.mkv': No such file or directory: 'does-not-exist'
 """
                                                                 # }}}1
 
-import argparse, contextlib, datetime, hashlib, json, os, re, \
+import argparse, contextlib, datetime, hashlib, json, pty, os, re, \
        subprocess, sys, urllib
 
 from collections import defaultdict
@@ -311,6 +344,9 @@ CONT_BACK     = 5                                               # TODO
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()      # dyn
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
 
+MPVCMD        = "mpv --fullscreen".split()                      # dyn
+MPVCONT       = lambda t: ["--start=" + str(int(t))]
+
 INFOS, INFOCH = "skip done playing new".split(), "*x> "
 INFOCO        = "cya grn red blu".split()
 INFOCHAR      = dict(zip(INFOS, INFOCH))
@@ -322,6 +358,8 @@ SKIP          = -1
 
 USE_COLOUR    = sys.stdout.isatty()   # NB: dyn by --[no-]colour
 SHOW_HIDDEN   = False                 # NB: dyn by --show-hidden
+
+STDERR        = sys.stderr
 
 class MError(RuntimeError): pass
 
@@ -338,7 +376,7 @@ def main(*args):                                                # {{{1
     try:
       return do_something(n.f, dpath, n) or 0
     except MError as e:
-      print("Error:", *e.args, file = sys.stderr)
+      print("Error:", safe(str(e)), file = sys.stderr)
       return 1
                                                                 # }}}1
 
@@ -405,6 +443,9 @@ def _argument_parser():                                         # {{{1
   for x in [p_list, p_list_a]:
     x.add_argument("--numbers", "-n", action = "store_true",
       help = "show numbers (which can be used for mark etc.)")
+  for x in [p_next, p_play]:
+    x.add_argument("--mpv", action = "store_true",
+      help = "use mpv instead of vlc")
   for x in [p_play, p_mark, p_unmark, p_skip]:
     x.add_argument("filename", metavar = "FILE")
   for x in [p_playing, p_watched, p_skipped]:
@@ -427,7 +468,7 @@ def _subcommand(s, names, desc, f):                             # {{{1
   return p
                                                                 # }}}1
 
-# NB: dyn HOME, VLCCMD, prompt_yn, COLOURS
+# NB: dyn HOME, VLCCMD, MPVCMD, prompt_yn, COLOURS
 def _test(verbose = False):                                     # {{{1
   global TEST_DIR, FAKE_HOME
   import doctest, tempfile
@@ -435,13 +476,13 @@ def _test(verbose = False):                                     # {{{1
   with tempfile.TemporaryDirectory() as tdir:
     TEST_DIR = Path(tdir); FAKE_HOME = TEST_DIR / "home"
     with dyn(globals(), HOME = FAKE_HOME, VLCCMD = ["true"] + VLCCMD,
-             prompt_yn = lambda _: True,
-             COLOURS   = { k:k.upper() for k in COLOURS }):
+             MPVCMD = ["true"] + MPVCMD, prompt_yn = lambda _: True,
+             COLOURS = { k:k.upper() for k in COLOURS }):
       failures, _tests = doctest.testmod(m, verbose = verbose)
       return 0 if failures == 0 else 1
                                                                 # }}}1
 
-DO_ARGS = "numbers filename flat zero only_files".split()
+DO_ARGS = "numbers mpv filename flat zero only_files".split()
 
 def do_something(f, dpath, ns):
   kw = { k:v for k,v in vars(ns).items() if k in DO_ARGS }
@@ -473,14 +514,14 @@ def do_list_dir_all(dpath, fs, numbers):
   do_list_dir_dirs (dpath, fs)
   do_list_dir_files(dpath, fs, numbers)
 
-def do_play_next(dpath, fs):
+def do_play_next(dpath, fs, mpv):
   fn = dir_next(dpath, fs)
-  if fn: play_file(dpath, fs, fn)
+  if fn: play_file(dpath, fs, fn, mpv)
   else: print("No files to play.")
 
-def do_play_file(dpath, fs, filename):
+def do_play_file(dpath, fs, filename, mpv):
   for fn in _files_from_spec(dpath, filename):
-    play_file(dpath, fs, fn)
+    play_file(dpath, fs, fn, mpv)
 
 def do_mark_file(dpath, _fs, filename):
   files = _files_from_spec(dpath, filename)
@@ -499,7 +540,7 @@ def do_skip_file(dpath, _fs, filename):
   db_update(dpath, { fn: SKIP for fn in files })
 
 def _files_from_spec(dpath, spec, must_exist = True):           # {{{1
-  if any( spec.endswith(ext) for ext in EXTS ):
+  if any( spec.lower().endswith(ext) for ext in EXTS ):
     return [check_filename(dpath, spec, must_exist)]
   elif re.fullmatch("all|(\d+(-\d+)?,)*(\d+(-\d+)?)", spec):
     files = dir_files(dpath)
@@ -645,25 +686,32 @@ def db_t(fs, fn):
   t = fs.get(fn)
   return None if t in [True, SKIP] else t
 
-# === playing & vlc ===
+# === playing & vlc & mpv ===
 
-def play_file(dpath, fs, fn):
-  t = db_t(fs, fn); etc = "from " + fmt_time(t) + " " if t else ""
+# TODO
+def play_file(dpath, fs, fn, mpv = False):                      # {{{1
+  t     = db_t(fs, fn); t_ = max(0, t - CONT_BACK) if t else 0
+  play  = vlc_play if not mpv else mpv_play
+  etc   = "from " + fmt_time(t) + " " if t else ""
   print("Playing", safe(fn), etc + "...")
-  t_ = vlc_play(dpath, fn, t)
-  db_update(dpath, { fn: t_ })
+  try:
+    t2 = play(str(dpath / fn), t_)
+  except (subprocess.CalledProcessError, FileNotFoundError) as e:
+    msg = e.strerror if hasattr(e, "strerror") else str(e)
+    raise MError("could not play file '{}': {}".format(fn, msg))
+  db_update(dpath, { fn: t2 })
+                                                                # }}}1
 
 # TODO: error handling? --noprompt?!
 # NB: we unfortunately can't tell the difference between a file that
 # has played completely and one that has played very little, so we
 # need to prompt :(
-def vlc_play(dpath, fn, t = None):                              # {{{1
-  fp, t_  = str(dpath / fn), max(0, t - CONT_BACK) if t else 0
-  cmd     = VLCCMD + (VLCCONT(t_) if t_ else []) + ["--", fp]
+def vlc_play(fp, t = None):
+  cmd = VLCCMD + (VLCCONT(t) if t else []) + ["--", fp]
   print("RUN", *map(safe, cmd)); subprocess.run(cmd, check = True)
-  t2      = vlc_get_times().get(fp) or True
-  return False if t2 == True and not prompt_yn("Done") else t2
-                                                                # }}}1
+  t_  = vlc_get_times().get(fp) or True
+  return False if t_ == True and not prompt_yn("Done") else t_
+
 
 # TODO: cleanup?
 def vlc_get_times():                                            # {{{1
@@ -683,6 +731,68 @@ def vlc_get_times():                                            # {{{1
     if l is None or t is None: return {}
     return dict(zip(l, t))
                                                                 # }}}1
+
+_VLC_TEST_CFG = """
+[RecentsMRL]
+list=file://{}, file://{}, file://{}, file://{}
+times=0, 0, 121666, 246135
+"""
+
+# TODO: error handling? no TEST_DIR?
+# NB: currently tests for TEST_DIR to see if we're testing so it can
+# suppress and replace output.
+def mpv_play(fp, t = None):                                     # {{{1
+  cmd     = MPVCMD + (MPVCONT(t) if t else []) + ["--", fp]
+  testing = "TEST_DIR" in globals()   # oh well
+  print("RUN", *map(safe, cmd))
+  b       = _pty_run(cmd, testing)[0]
+  if testing: b = _MPV_TEST_OUT.format(fp).encode()
+  strpt   = datetime.datetime.strptime
+  x       = b[b.rindex(b"AV:"):b.rindex(b"A-V:")][4:-1]
+  a, b    = x.split(b" / "); c = b.split()[0]
+  z       =  strpt("00:00:00", "%H:%M:%S")
+  t_      = (strpt(a.decode(), "%H:%M:%S") - z).seconds
+  tot     = (strpt(c.decode(), "%H:%M:%S") - z).seconds
+  return t_ or False if t_ < tot else True
+                                                                # }}}1
+
+def _pty_run(cmd, testing = False, bufsize = 1024):             # {{{1
+  buf, pid = b"", os.getpid()
+  def read(fd):
+    nonlocal buf
+    data = os.read(fd, 1024); buf = (buf + data)[-bufsize:]
+    return data if not testing else b"\r"
+  try:
+    retcodesig = pty.spawn(cmd, read)
+  except OSError as e:
+    if os.getpid() != pid:
+      print("*** CHILD exec() FAILED ***", file = STDERR)
+      print(e.__class__.__name__, e, file = STDERR)
+      os._exit(127)
+    else: raise
+  retcode, signal = retcodesig >> 8, retcodesig & 0xff
+  if retcode == 127 and b"*** CHILD exec() FAILED ***" in buf \
+                    and b"FileNotFoundError" in buf:
+    e = FileNotFoundError(os.errno.ENOENT,
+          "No such file or directory: '{}'".format(cmd[0]))
+    e.filename = cmd[0]
+    raise e
+  if retcode: raise subprocess.CalledProcessError(retcode, cmd)
+  return buf, -signal or retcode
+                                                                # }}}1
+
+_MPV_TEST_OUT = """
+Playing: {}
+ (+) Video --vid=1 (*) (h264 1920x1080 23.810fps)
+ (+) Audio --aid=1 --alang=jpn (*) (aac 2ch 44100Hz)
+ (+) Subs  --sid=1 --slang=eng (*) (ass)
+AO: [pulse] 44100Hz stereo 2ch float
+VO: [opengl] 1920x1080 yuv420p
+AV: 00:01:01 / 00:15:47 (6%) A-V:  0.000 Cache: 10s+56MB
+
+
+Exiting... (Quit)
+"""
 
 # === miscellaneous helpers ===
 

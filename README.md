@@ -17,13 +17,15 @@
 m - minimalistic media manager
 
 m keeps track of which files you've played (or are still playing) and
-thus allows you to easily continue playing the next file (using vlc).
+thus allows you to easily continue playing the next file (using vlc or
+mpv).
 
 * Supports importing existing playing/watched data from Kodi.
 * Stores its data in JSON files (one per directory) in `~/.obfusk-m`;
   you can put this directory in git if you want a changelog :)
 
-NB: extracting the timestamp from the vlc config is a little hacky :(
+NB: extracting the timestamp from the vlc config and mpv output is a
+little hacky :(
 
 NB: m uses `$PWD` to make sure it sees the current path the same as
 the shell it is run from (i.e. it does not resolve the path by
@@ -102,7 +104,6 @@ $ pip3 install --user mmm   # for Debian; on other OS's you may need
 
 * bash completion?
 * `~/.obfusk-m/config.json`? + `--no-*`
-* mpv support?
 * `m mv`?
 * `--tree` for `playing` etc.?
 * `--json`?
