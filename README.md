@@ -73,16 +73,55 @@ $ m --help      # global options & subcommands
 $ m ls --help   # subcommand (ls in this case) options & argument(s)
 ```
 
+## Requirements
+
+Python >= 3.5.
+
 ## Installing
 
 You can just put `m.py` somewhere on your `$PATH` (in e.g. `~/bin`; I
 suggest calling it `m`, but you're free to choose another name).
 
-Alternatively, you can use pip:
+You may want to clone the repository instead of just downloading
+`m.py` to be able to get new versions easily.
+
+Alternatively, you can install m using pip (the Python package
+manager) or build and install a Debian package.
+
+NB: the pip and Debian packages are called `mmm` instead of `m`.
+
+### Using git
+
+```bash
+$ cd /some/convenient/dir
+$ git clone https://github.com/obfusk/m.git obfusk-m
+$ cd ~/bin                  # or some other dir on your $PATH
+$ ln -s /some/convenient/dir/obfusk-m/m.py m
+```
+
+Updating:
+
+```bash
+$ cd /some/convenient/dir/obfusk-m
+$ git pull
+```
+
+### Using pip
 
 ```bash
 $ pip3 install --user mmm   # for Debian; on other OS's you may need
                             # pip instead of pip3 and/or no --user
+```
+
+### Building a Debian package
+
+```bash
+$ sudo apt install debhelper dh-python    # install build dependencies
+$ cd /some/convenient/dir
+$ git clone https://github.com/obfusk/m.git obfusk-m
+$ cd obfusk-m
+$ dpkg-buildpackage
+$ sudo dpkg -i ../mmm_*_all.deb
 ```
 
 ## Configuration File
