@@ -102,6 +102,14 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 * update README + version + package!
 * `ack TODO`
+
+<!-- -->
+
+* `m unfinished`
+* `m l[da] --only-indexed`
+
+<!-- -->
+
 * `m --virtual foo/bar {ls,...}` + `m virt [--update] [--title]*
   [--url]* [--url-template] [--episodes] [--browser]` +
   `VIRTUAL:/foo/bar` + `virt__*.json` + `m {watching,...}
@@ -109,6 +117,9 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 * `m import-{playing,watched} [--zero]`?
 * `m kodi-*-sql`?
 * `m kodi-import-* [--replace] [--include] [--exclude]`?
+
+<!-- -->
+
 * only use `safe()` when stdout is a tty?
 * document `safe()` vs `--zero`
 * more file extensions!

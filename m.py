@@ -291,6 +291,9 @@ subcommands:
                         import watched data from kodi
     kodi-import-playing
                         import playing data from kodi
+<BLANKLINE>
+NB: FILE is a file name or number(s): e.g. '1', '1-5', '1,4-7' or 'all'.
+
 >>> runH("ls --help")
 usage: m list [-h] [--numbers | --no-numbers]
 <BLANKLINE>
@@ -300,6 +303,7 @@ optional arguments:
   -h, --help     show this help message and exit
   --numbers, -n  show numbers (which can be used for mark etc.)
   --no-numbers
+
 >>> runH("p --help")
 usage: m play [-h] [--mpv | --vlc] FILE
 <BLANKLINE>
@@ -312,6 +316,7 @@ optional arguments:
   -h, --help  show this help message and exit
   --mpv       play using mpv
   --vlc       play using vlc (the default)
+
 >>> runH("playing --help")
 usage: m playing [-h] [--flat] [--zero] [--only-files]
 <BLANKLINE>
@@ -410,7 +415,9 @@ DO_ARGS   = "numbers player filename flat zero only_files".split()
 CFG_ARGS  = "show_hidden colour numbers player".split()
 
 def _argument_parser(d):                                        # {{{1
-  p = argparse.ArgumentParser(description = DESC)
+  epilog  = """NB: FILE is a file name or number(s):
+               e.g. '1', '1-5', '1,4-7' or 'all'."""
+  p = argparse.ArgumentParser(description = DESC, epilog = epilog)
   p.add_argument("--version", action = "version",
                  version = "%(prog)s {}".format(__version__))
   p.add_argument("--dir", "-d", metavar = "DIR",
