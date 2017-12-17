@@ -3,7 +3,7 @@ PY      ?= python3
 ME      := m.py
 PKG     := mmm
 
-.PHONY: test test_verbose coverage clean package publish
+.PHONY: test test_verbose coverage clean install package publish
 
 test:
 	$(PY) $(ME) _test
@@ -20,6 +20,12 @@ clean:
 	rm -fr README.rst build/ dist/ $(PKG).egg-info/
 	find -name '*.pyc' -delete
 	find -name __pycache__ -delete
+	rm -fr debian/.debhelper debian/files debian/mmm*
+
+install:
+	test -d "$(DESTDIR)"
+	mkdir -p "$(DESTDIR)"/usr/bin
+	cp -i m.py "$(DESTDIR)"/usr/bin/m
 
 %.rst: %.md
 	grep -Ev '^\s*<!--.*-->\s*$$' $< \

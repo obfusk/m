@@ -1,0 +1,20 @@
+Source: mmm
+Section: utils
+Priority: optional
+Maintainer: Felix C. Stegerman <flx@obfusk.net>
+Build-Depends: debhelper (>=9), dh-python, python3:any (>= 3.5~)
+Standards-Version: 3.9.8
+Homepage: https://github.com/obfusk/m
+Vcs-Git: https://github.com/obfusk/m.git
+Vcs-Browser: https://github.com/obfusk/m
+X-Python3-Version: >= 3.5
+
+Package: mmm
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${python3:Depends}
+Recommends: vlc | mpv
+Description: minimalistic media manager
+ m keeps track of which files you've played (or are still playing) and
+ thus allows you to easily continue playing the next file (using vlc
+ or mpv).
