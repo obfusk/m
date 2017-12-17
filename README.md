@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2017-12-16
+    Date        : 2017-12-17
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
     Version     : v0.2.1
@@ -85,9 +85,22 @@ $ pip3 install --user mmm   # for Debian; on other OS's you may need
                             # pip instead of pip3 and/or no --user
 ```
 
+## Configuration File
+
+You can set some defaults in `~/.obfusk-m/config.json`; for example:
+
+```json
+{
+  "colour": true,
+  "numbers": true,
+  "player": "mpv",
+  "show_hidden": true
+}
+```
+
 ## TODO
 
-* update version + package!
+* update README + version + package!
 * `ack TODO`
 * `m --virtual foo/bar {ls,...}` + `m virt [--update] [--title]*
   [--url]* [--url-template] [--episodes] [--browser]` +
@@ -103,12 +116,12 @@ $ pip3 install --user mmm   # for Debian; on other OS's you may need
 <!-- -->
 
 * bash completion?
-* `~/.obfusk-m/config.json`? + `--no-*`
 * `m mv`?
 * `--tree` for `playing` etc.?
 * `--json`?
 * kodi db export/sync?
 * sign pypi package?
+* fix `.exist()` race conditions?
 
 ## License
 

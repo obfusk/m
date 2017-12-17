@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-16
+# Date        : 2017-12-17
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
 # Version     : v0.2.1
@@ -48,8 +48,9 @@ and monkey-patching are not available.
 True
 
 >>> import io
+>>> _clr = { True: "--colour", False: "--no-colour", None: "" }
 >>> def run(a, d = d, c = False):
-...   main("--colour" if c else "--no-colour", "-d", str(d), *a.split())
+...   main("-d", str(d), *(_clr[c]+" "+a).split())
 >>> def runO(*a, **k):
 ...   f = io.StringIO()
 ...   with contextlib.redirect_stdout(f): run(*a, **k)
@@ -205,9 +206,28 @@ RUN true mpv --fullscreen --start=56 -- .../media/y.mkv
 Playing y.mkv from 0:01:01 ...
 RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 
+>>> cfg = dict(show_hidden = True, colour = True, numbers = True,
+...            player = "mpv")
+>>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps(cfg))
+>>> run("ls", c = None)
+  1 [ ] .dotfile.mkv
+  2 [CYA*NON] x.mkv
+  3 [GRNxNON] y.mkv
+  4 [GRNxNON] z.mkv
+>>> run("play y.mkv") # doctest: +ELLIPSIS
+Playing y.mkv ...
+RUN true mpv --fullscreen -- .../media/y.mkv
+>>> run("play --vlc y.mkv") # doctest: +ELLIPSIS
+Playing y.mkv from 0:01:01 ...
+RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
+>>> run("--no-show-hidden --no-colour ls --no-numbers", c = None)
+[*] x.mkv
+[x] y.mkv
+[x] z.mkv
+>>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps({}))
+
 >>> (d / "un\033safe\x01file.mkv").touch()
 >>> (d / "unsafe\ndir").mkdir()
-
 >>> run("ls")
 [ ] un?safe?file.mkv
 [*] x.mkv
@@ -235,7 +255,8 @@ Error: '/.../bar.mkv' is not a file in '/.../media'
 /.../home/.obfusk-m/dir__...|media__....json
 
 >>> runH("--help") # doctest: +ELLIPSIS
-usage: m [-h] [--version] [--dir DIR] [--show-hidden] [--colour | --no-colour]
+usage: m [-h] [--version] [--dir DIR] [--show-hidden | --no-show-hidden]
+         [--colour | --no-colour | --auto-colour]
          {list,l,ls,...}
          ...
 <BLANKLINE>
@@ -246,9 +267,10 @@ optional arguments:
   --version             show program's version number and exit
   --dir DIR, -d DIR     use DIR instead of $PWD
   --show-hidden         show hidden (i.e. starting with .) files & dirs
+  --no-show-hidden
   --colour              use coloured output (the default when stdout is a tty)
-  --no-colour, --nocolour
-                        do not use coloured output
+  --no-colour
+  --auto-colour
 <BLANKLINE>
 subcommands:
   {list,l,ls,...,_test}
@@ -270,15 +292,16 @@ subcommands:
     kodi-import-playing
                         import playing data from kodi
 >>> runH("ls --help")
-usage: m list [-h] [--numbers]
+usage: m list [-h] [--numbers | --no-numbers]
 <BLANKLINE>
 list files
 <BLANKLINE>
 optional arguments:
   -h, --help     show this help message and exit
   --numbers, -n  show numbers (which can be used for mark etc.)
+  --no-numbers
 >>> runH("p --help")
-usage: m play [-h] [--mpv] FILE
+usage: m play [-h] [--mpv | --vlc] FILE
 <BLANKLINE>
 play FILE
 <BLANKLINE>
@@ -287,7 +310,8 @@ positional arguments:
 <BLANKLINE>
 optional arguments:
   -h, --help  show this help message and exit
-  --mpv       use mpv instead of vlc
+  --mpv       play using mpv
+  --vlc       play using vlc (the default)
 >>> runH("playing --help")
 usage: m playing [-h] [--flat] [--zero] [--only-files]
 <BLANKLINE>
@@ -323,8 +347,8 @@ Error: could not play file 'x.mkv': No such file or directory: 'does-not-exist'
 """
                                                                 # }}}1
 
-import argparse, contextlib, datetime, hashlib, json, pty, os, re, \
-       subprocess, sys, urllib
+import argparse, contextlib, datetime, inspect, hashlib, json, pty, \
+       os, re, subprocess, sys, urllib
 
 from collections import defaultdict
 from pathlib import Path
@@ -335,11 +359,13 @@ DESC          = "m - minimalistic media manager"
 
 HOME          = Path.home()                                     # dyn
 CFG           = ".obfusk-m"                     # use git?! -> sync?!
+CFGFILE       = "config.json"
 VLCQT         = ".config/vlc/vlc-qt-interface.conf"
 KODIDB        = ".kodi/userdata/Database/MyVideos107.db"
 
 EXTS          = ".avi .m4v .mkv .mp3 .mp4 .ogg .ogv".split()    # TODO
 CONT_BACK     = 5                                               # TODO
+PLAYER        = "vlc"
 
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()      # dyn
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
@@ -368,7 +394,7 @@ class MError(RuntimeError): pass
 # NB: dyn USE_COLOUR, SHOW_HIDDEN
 # TODO: use threading.local?
 def main(*args):                                                # {{{1
-  p = _argument_parser(); n = p.parse_args(args)
+  p = _argument_parser(_config_defaults()); n = p.parse_args(args)
   c = n.colour if n.colour is not None else USE_COLOUR
   if n.subcommand == "_test": return _test(n.verbose)
   with dyn(globals(), USE_COLOUR = c, SHOW_HIDDEN = n.show_hidden):
@@ -380,24 +406,33 @@ def main(*args):                                                # {{{1
       return 1
                                                                 # }}}1
 
-def _argument_parser():                                         # {{{1
+DO_ARGS   = "numbers player filename flat zero only_files".split()
+CFG_ARGS  = "show_hidden colour numbers player".split()
+
+def _argument_parser(d):                                        # {{{1
   p = argparse.ArgumentParser(description = DESC)
   p.add_argument("--version", action = "version",
                  version = "%(prog)s {}".format(__version__))
   p.add_argument("--dir", "-d", metavar = "DIR",
                  help = "use DIR instead of $PWD")
-  p.add_argument("--show-hidden", action = "store_true",
-                 help = "show hidden (i.e. starting with .) "
-                        "files & dirs")
 
-  g = p.add_mutually_exclusive_group()
-  p.set_defaults(colour = None)
-  g.add_argument("--colour", action = "store_true",
-                 help = "use coloured output "
-                        "(the default when stdout is a tty)")
-  g.add_argument("--no-colour", "--nocolour",
-                 action = "store_false", dest = "colour",
-                 help = "do not use coloured output")
+  g1 = p.add_mutually_exclusive_group()
+  g1.set_defaults(show_hidden = d.get("show_hidden"))
+  g1.add_argument("--show-hidden", action = "store_true",
+                  help = "show hidden (i.e. starting with .) "
+                         "files & dirs")
+  g1.add_argument("--no-show-hidden", action = "store_false",
+                  dest = "show_hidden")
+
+  g2 = p.add_mutually_exclusive_group()
+  g2.set_defaults(colour = d.get("colour"))
+  g2.add_argument("--colour", action = "store_true",
+                  help = "use coloured output "
+                         "(the default when stdout is a tty)")
+  g2.add_argument("--no-colour", action = "store_false",
+                  dest = "colour")
+  g2.add_argument("--auto-colour", action = "store_const",
+                  dest = "colour", const = None)
 
   s = p.add_subparsers(title = "subcommands", dest = "subcommand")
   s.required = True           # https://bugs.python.org/issue9253
@@ -441,11 +476,19 @@ def _argument_parser():                                         # {{{1
   p_test.add_argument("--verbose", "-v", action = "store_true")
 
   for x in [p_list, p_list_a]:
-    x.add_argument("--numbers", "-n", action = "store_true",
+    g = x.add_mutually_exclusive_group()
+    g.set_defaults(numbers = d.get("numbers"))
+    g.add_argument("--numbers", "-n", action = "store_true",
       help = "show numbers (which can be used for mark etc.)")
+    g.add_argument("--no-numbers", action = "store_false",
+                   dest = "numbers")
   for x in [p_next, p_play]:
-    x.add_argument("--mpv", action = "store_true",
-      help = "use mpv instead of vlc")
+    g = x.add_mutually_exclusive_group()
+    g.set_defaults(player = d.get("player", PLAYER))
+    g.add_argument("--mpv", action = "store_const", dest = "player",
+      const = "mpv", help = "play using mpv")
+    g.add_argument("--vlc", action = "store_const", dest = "player",
+      const = "vlc", help = "play using vlc (the default)")
   for x in [p_play, p_mark, p_unmark, p_skip]:
     x.add_argument("filename", metavar = "FILE")
   for x in [p_playing, p_watched, p_skipped]:
@@ -468,6 +511,11 @@ def _subcommand(s, names, desc, f):                             # {{{1
   return p
                                                                 # }}}1
 
+# TODO: prevent misconfiguration?
+def _config_defaults():
+  cfg = db_cfg()
+  return { k: cfg.get(k) for k in CFG_ARGS }
+
 # NB: dyn HOME, VLCCMD, MPVCMD, prompt_yn, COLOURS
 def _test(verbose = False):                                     # {{{1
   global TEST_DIR, FAKE_HOME
@@ -482,10 +530,10 @@ def _test(verbose = False):                                     # {{{1
       return 0 if failures == 0 else 1
                                                                 # }}}1
 
-DO_ARGS = "numbers mpv filename flat zero only_files".split()
-
 def do_something(f, dpath, ns):
-  kw = { k:v for k,v in vars(ns).items() if k in DO_ARGS }
+  params  = inspect.signature(f).parameters
+  kw      = { k:v for k,v in vars(ns).items()
+                  if k in DO_ARGS and k in params }
   return f(dpath, db_load(dpath)["files"], **kw)
 
 # === do_* ===
@@ -514,14 +562,14 @@ def do_list_dir_all(dpath, fs, numbers):
   do_list_dir_dirs (dpath, fs)
   do_list_dir_files(dpath, fs, numbers)
 
-def do_play_next(dpath, fs, mpv):
+def do_play_next(dpath, fs, player):
   fn = dir_next(dpath, fs)
-  if fn: play_file(dpath, fs, fn, mpv)
+  if fn: play_file(dpath, fs, fn, player)
   else: print("No files to play.")
 
-def do_play_file(dpath, fs, filename, mpv):
+def do_play_file(dpath, fs, filename, player):
   for fn in _files_from_spec(dpath, filename):
-    play_file(dpath, fs, fn, mpv)
+    play_file(dpath, fs, fn, player)
 
 def do_mark_file(dpath, _fs, filename):
   files = _files_from_spec(dpath, filename)
@@ -647,6 +695,11 @@ def _iterdir(dpath):
 
 # === db_* ===
 
+def db_cfg():
+  cf = HOME / CFG / CFGFILE
+  if not cf.exists(): return {}
+  with cf.open() as f: return json.load(f)
+
 # NB: files map to
 #   * True      (done)
 #   * int (>0)  (playing, seconds)
@@ -689,20 +742,19 @@ def db_t(fs, fn):
 # === playing & vlc & mpv ===
 
 # TODO
-def play_file(dpath, fs, fn, mpv = False):                      # {{{1
+def play_file(dpath, fs, fn, player = None):                    # {{{1
   t     = db_t(fs, fn); t_ = max(0, t - CONT_BACK) if t else 0
-  play  = vlc_play if not mpv else mpv_play
   etc   = "from " + fmt_time(t) + " " if t else ""
   print("Playing", safe(fn), etc + "...")
   try:
-    t2 = play(str(dpath / fn), t_)
+    t2 = PLAYERS[player or PLAYER](str(dpath / fn), t_)
   except (subprocess.CalledProcessError, FileNotFoundError) as e:
     msg = e.strerror if hasattr(e, "strerror") else str(e)
     raise MError("could not play file '{}': {}".format(fn, msg))
   db_update(dpath, { fn: t2 })
                                                                 # }}}1
 
-# TODO: error handling? --noprompt?!
+# TODO: error handling? --no-prompt?!
 # NB: we unfortunately can't tell the difference between a file that
 # has played completely and one that has played very little, so we
 # need to prompt :(
@@ -793,6 +845,8 @@ AV: 00:01:01 / 00:15:47 (6%) A-V:  0.000 Cache: 10s+56MB
 
 Exiting... (Quit)
 """
+
+PLAYERS = dict(mpv = mpv_play, vlc = vlc_play)
 
 # === miscellaneous helpers ===
 
