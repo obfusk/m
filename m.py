@@ -206,9 +206,17 @@ RUN true mpv --fullscreen --start=56 -- .../media/y.mkv
 Playing y.mkv from 0:01:01 ...
 RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 
+>>> run("db-file") # doctest: +ELLIPSIS
+/.../home/.obfusk-m/dir__...|media__....json
+
+
+Now, test w/ config.json
+------------------------
+
 >>> cfg = dict(show_hidden = True, colour = True, numbers = True,
 ...            player = "mpv")
 >>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps(cfg))
+
 >>> run("ls", c = None)
   1 [ ] .dotfile.mkv
   2 [CYA*NON] x.mkv
@@ -224,10 +232,16 @@ RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 [*] x.mkv
 [x] y.mkv
 [x] z.mkv
+
 >>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps({}))
+
+
+Now, test w/ "unsafe" file & dir
+--------------------------------
 
 >>> (d / "un\033safe\x01file.mkv").touch()
 >>> (d / "unsafe\ndir").mkdir()
+
 >>> run("ls")
 [ ] un?safe?file.mkv
 [*] x.mkv
@@ -240,6 +254,10 @@ RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 Playing un?safe?file.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/un?safe?file.mkv
 
+
+Now, check some errors
+----------------------
+
 >>> runE("mark /foo/bar/baz.mkv") # doctest: +ELLIPSIS
 Error: '/foo/bar/baz.mkv' does not start with '/.../media'
 >>> runE("mark nonexistent.mkv") # doctest: +ELLIPSIS
@@ -251,8 +269,9 @@ Error: '/.../more/a.mkv' is not a file in '/.../media'
 >>> runE("unmark foo/bar.mkv") # doctest: +ELLIPSIS
 Error: '/.../bar.mkv' is not a file in '/.../media'
 
->>> run("db-file") # doctest: +ELLIPSIS
-/.../home/.obfusk-m/dir__...|media__....json
+
+Now, check --help
+-----------------
 
 >>> runH("--help") # doctest: +ELLIPSIS
 usage: m [-h] [--version] [--dir DIR] [--show-hidden | --no-show-hidden]
@@ -328,6 +347,10 @@ optional arguments:
   --zero        zero-delimited (implies --flat) output (for e.g. xargs -0)
   --only-files  only print files, not times
 
+
+Now, check errors running commands
+----------------------------------
+
 >>> VLCCMD[0] = "false"
 >>> runE("play x.mkv") # doctest: +ELLIPSIS
 Playing x.mkv ...
@@ -349,6 +372,53 @@ Error: could not play file 'x.mkv': Command ... returned non-zero exit status 1.
 Playing x.mkv ...
 RUN does-not-exist mpv --fullscreen -- .../media/x.mkv
 Error: could not play file 'x.mkv': No such file or directory: 'does-not-exist'
+
+
+Now, check some _assert()s
+--------------------------
+
+>>> def dbc(**db): _db_check("x.json", "/some/dir", db)
+>>> dbc()
+Traceback (most recent call last):
+  ...
+MError: x.json has wrong key(s)
+>>> dbc(dir = None, files = None, oops = 1)
+Traceback (most recent call last):
+  ...
+MError: x.json has wrong key(s)
+>>> dbc(dir = "/some/other/dir", files = None)
+Traceback (most recent call last):
+  ...
+MError: x.json has wrong dir
+>>> dbc(dir = "/some/dir", files = { "/some/file": 0 })
+Traceback (most recent call last):
+  ...
+MError: x.json has wrong files value(s)
+>>> dbc(dir = "/some/dir", files = { "/some/file": -7 })
+Traceback (most recent call last):
+  ...
+MError: x.json has wrong files value(s)
+>>> dbc(dir = "/some/dir", files = { "/some/file": False })
+Traceback (most recent call last):
+  ...
+MError: x.json has wrong files value(s)
+>>> dbc(dir = "/some/dir", files = { "/some/file": None })
+Traceback (most recent call last):
+  ...
+MError: x.json has wrong files value(s)
+
+>>> _cfg_check(dict(x = 99))
+Traceback (most recent call last):
+  ...
+MError: config.json has unexpected key(s)
+>>> _cfg_check(dict(show_hidden = 1))
+Traceback (most recent call last):
+  ...
+MError: config.json has unexpected value(s)
+>>> _cfg_check(dict(player = "oops"))
+Traceback (most recent call last):
+  ...
+MError: config.json has unexpected value(s)
 """
                                                                 # }}}1
 
@@ -399,7 +469,7 @@ class MError(RuntimeError): pass
 # NB: dyn USE_COLOUR, SHOW_HIDDEN
 # TODO: use threading.local?
 def main(*args):                                                # {{{1
-  p = _argument_parser(_config_defaults()); n = p.parse_args(args)
+  p = _argument_parser(db_cfg()); n = p.parse_args(args)
   c = n.colour if n.colour is not None else USE_COLOUR
   if n.subcommand == "_test": return _test(n.verbose)
   with dyn(globals(), USE_COLOUR = c, SHOW_HIDDEN = n.show_hidden):
@@ -412,9 +482,10 @@ def main(*args):                                                # {{{1
                                                                 # }}}1
 
 DO_ARGS   = "numbers player filename flat zero only_files".split()
-CFG_ARGS  = "show_hidden colour numbers player".split()
+CFG_ARGS  = dict(show_hidden = bool, colour = bool, numbers = bool,
+                 player = None)                   # --> PLAYERS.keys()
 
-def _argument_parser(d):                                        # {{{1
+def _argument_parser(d = {}):                                   # {{{1
   epilog  = """NB: FILE is a file name or number(s):
                e.g. '1', '1-5', '1,4-7' or 'all'."""
   p = argparse.ArgumentParser(description = DESC, epilog = epilog)
@@ -517,11 +588,6 @@ def _subcommand(s, names, desc, f):                             # {{{1
   p.set_defaults(f = f)
   return p
                                                                 # }}}1
-
-# TODO: prevent misconfiguration?
-def _config_defaults():
-  cfg = db_cfg()
-  return { k: cfg.get(k) for k in CFG_ARGS }
 
 # NB: dyn HOME, VLCCMD, MPVCMD, prompt_yn, COLOURS
 def _test(verbose = False):                                     # {{{1
@@ -705,7 +771,17 @@ def _iterdir(dpath):
 def db_cfg():
   cf = HOME / CFG / CFGFILE
   if not cf.exists(): return {}
-  with cf.open() as f: return json.load(f)
+  with cf.open() as f: return _cfg_check(json.load(f))
+
+def _cfg_check(cfg):                                            # {{{1
+  _assert(CFGFILE + " has unexpected key(s)",
+          set(cfg.keys()) <= set(CFG_ARGS.keys()))
+  _assert(CFGFILE + " has unexpected value(s)",
+          all( cfg[k] in v if isinstance(v, (tuple, list))
+                           else type(cfg[k]) is v
+               for k,v in CFG_ARGS.items() if k in cfg ))
+  return cfg
+                                                                # }}}1
 
 # NB: files map to
 #   * True      (done)
@@ -714,24 +790,26 @@ def db_cfg():
 def db_load(dpath):
   df = db_dir_file(dpath)
   if not df.exists(): return dict(dir = str(dpath), files = {})
-  with df.open() as f: return _db_check(dpath, json.load(f))
+  with df.open() as f: return _db_check(df, dpath, json.load(f))
 
 # TODO: use flock? backup?
 def db_update(dpath, files):                                    # {{{1
   (HOME / CFG).mkdir(exist_ok = True)
-  fs  = db_load(dpath)["files"]
-  fs_ = { k:v for k,v in {**fs, **files}.items() if v != False }
-  db  = _db_check(dpath, dict(dir = str(dpath), files = fs_))
-  with db_dir_file(dpath).open("w") as f:
+  df, fs  = db_dir_file(dpath), db_load(dpath)["files"]
+  fs_     = { k:v for k,v in {**fs, **files}.items() if v != False }
+  db      = _db_check(df, dpath, dict(dir = str(dpath), files = fs_))
+  with df.open("w") as f:
     json.dump(db, f, indent = 2, sort_keys = True)
     f.write("\n")
                                                                 # }}}1
 
-def _db_check(dpath, db):                                       # {{{1
-  assert sorted(db.keys()) == "dir files".split()
-  assert db["dir"] == str(dpath)
-  assert all( x == True or type(x) == int and (x > 0 or x == SKIP)
-              for x in db["files"].values() )
+def _db_check(df, dpath, db):                                   # {{{1
+  _assert(str(df) + " has wrong key(s)",
+          sorted(db.keys()) == "dir files".split())
+  _assert(str(df) + " has wrong dir", db["dir"] == str(dpath))
+  _assert(str(df) + " has wrong files value(s)",
+          all( x == True or type(x) == int and (x > 0 or x == SKIP)
+               for x in db["files"].values() ))
   return db
                                                                 # }}}1
 
@@ -853,7 +931,8 @@ AV: 00:01:01 / 00:15:47 (6%) A-V:  0.000 Cache: 10s+56MB
 Exiting... (Quit)
 """
 
-PLAYERS = dict(mpv = mpv_play, vlc = vlc_play)
+PLAYERS             = dict(mpv = mpv_play, vlc = vlc_play)
+CFG_ARGS["player"]  = tuple(PLAYERS.keys())
 
 # === miscellaneous helpers ===
 
@@ -884,6 +963,9 @@ def cwd(): return Path(os.environ["PWD"])
 
 def safe(s):
   return "".join( c if c.isprintable() else "?" for c in s )
+
+def _assert(msg, cond):
+  if not cond: raise MError(msg)
 
 # === kodi ===
 
