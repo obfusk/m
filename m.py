@@ -374,8 +374,11 @@ RUN does-not-exist mpv --fullscreen -- .../media/x.mkv
 Error: could not play file 'x.mkv': No such file or directory: 'does-not-exist'
 
 
-Now, check some _assert()s
---------------------------
+Tests
+=====
+
+Check some _assert()s
+---------------------
 
 >>> def dbc(**db): _db_check("x.json", "/some/dir", db)
 >>> dbc()
