@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-17
+# Date        : 2017-12-18
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
 # Version     : v0.2.1
@@ -460,7 +460,9 @@ INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
 
 SKIP          = -1
 
-USE_COLOUR    = sys.stdout.isatty()   # NB: dyn by --[no-]colour
+STDOUT_TTY    = sys.stdout.isatty()
+USE_SAFE      = STDOUT_TTY                                      # dyn
+USE_COLOUR    = STDOUT_TTY            # NB: dyn by --[no-]colour
 SHOW_HIDDEN   = False                 # NB: dyn by --show-hidden
 
 STDERR        = sys.stderr
@@ -480,7 +482,7 @@ def main(*args):                                                # {{{1
     try:
       return do_something(n.f, dpath, n) or 0
     except MError as e:
-      print("Error:", safe(str(e)), file = sys.stderr)
+      puts("Error:", str(e), file = sys.stderr)
       return 1
                                                                 # }}}1
 
@@ -592,7 +594,7 @@ def _subcommand(s, names, desc, f):                             # {{{1
   return p
                                                                 # }}}1
 
-# NB: dyn HOME, VLCCMD, MPVCMD, prompt_yn, COLOURS
+# NB: dyn HOME, VLCCMD, MPVCMD, prompt_yn, COLOURS, USE_SAFE
 def _test(verbose = False):                                     # {{{1
   global TEST_DIR, FAKE_HOME
   import doctest, tempfile
@@ -601,7 +603,8 @@ def _test(verbose = False):                                     # {{{1
     TEST_DIR = Path(tdir); FAKE_HOME = TEST_DIR / "home"
     with dyn(globals(), HOME = FAKE_HOME, VLCCMD = ["true"] + VLCCMD,
              MPVCMD = ["true"] + MPVCMD, prompt_yn = lambda _: True,
-             COLOURS = { k:k.upper() for k in COLOURS }):
+             COLOURS = { k:k.upper() for k in COLOURS },
+             USE_SAFE = True):
       failures, _tests = doctest.testmod(m, verbose = verbose)
       return 0 if failures == 0 else 1
                                                                 # }}}1
@@ -655,7 +658,7 @@ def do_unmark_file(dpath, fs, filename):                        # {{{1
   files   = _files_from_spec(dpath, filename, False)
   files_  = [ fn for fn in files if fn in fs ]
   for fn in sorted(set(files) - set(files_)):
-    print("Ignoring unknown file '{}'.".format(fn), file = sys.stderr)
+    puts("Ignoring unknown file '{}'.".format(fn), file = sys.stderr)
   db_update(dpath, { fn: False for fn in files_ })
                                                                 # }}}1
 
@@ -697,7 +700,7 @@ def do_skipped_files(_dpath, _fs, flat, zero):
 def _print_files_with_state(st, flat, zero, w_t = False):       # {{{1
   data = _files_with_state(st)
   for dpath_s in sorted(data):
-    if not (flat or zero): print(safe(dpath_s) + ":")
+    if not (flat or zero): puts(dpath_s + ":")
     for fn, what in sorted(data[dpath_s]):
       x = str(Path(dpath_s) / fn) if flat or zero else "  " + fn
       s = safe(x) if not zero else x
@@ -716,7 +719,7 @@ def _files_with_state(st):                                      # {{{1
                                                                 # }}}1
 
 def do_dbfile(dpath, _fs):
-  print(db_dir_file(dpath))
+  puts(str(db_dir_file(dpath)))
 
 def do_kodi_import_watched(_dpath, _fs):
   data = defaultdict(dict)
@@ -833,7 +836,7 @@ def db_t(fs, fn):
 def play_file(dpath, fs, fn, player = None):                    # {{{1
   t     = db_t(fs, fn); t_ = max(0, t - CONT_BACK) if t else 0
   etc   = "from " + fmt_time(t) + " " if t else ""
-  print("Playing", safe(fn), etc + "...")
+  puts("Playing", fn, etc + "...")
   try:
     t2 = PLAYERS[player or PLAYER](str(dpath / fn), t_)
   except (subprocess.CalledProcessError, FileNotFoundError) as e:
@@ -848,7 +851,7 @@ def play_file(dpath, fs, fn, player = None):                    # {{{1
 # need to prompt :(
 def vlc_play(fp, t = None):
   cmd = VLCCMD + (VLCCONT(t) if t else []) + ["--", fp]
-  print("RUN", *map(safe, cmd)); subprocess.run(cmd, check = True)
+  puts("RUN", *cmd); subprocess.run(cmd, check = True)
   t_  = vlc_get_times().get(fp) or True
   return False if t_ == True and not prompt_yn("Done") else t_
 
@@ -884,7 +887,7 @@ times=0, 0, 121666, 246135
 def mpv_play(fp, t = None):                                     # {{{1
   cmd     = MPVCMD + (MPVCONT(t) if t else []) + ["--", fp]
   testing = "TEST_DIR" in globals()   # oh well
-  print("RUN", *map(safe, cmd))
+  puts("RUN", *cmd)
   b       = _pty_run(cmd, testing)[0]
   if testing: b = _MPV_TEST_OUT.format(fp).encode()
   strpt   = datetime.datetime.strptime
@@ -965,7 +968,10 @@ def fmt_time(secs):
 def cwd(): return Path(os.environ["PWD"])
 
 def safe(s):
-  return "".join( c if c.isprintable() else "?" for c in s )
+  return "".join( c if c.isprintable() else "?" for c in s ) \
+    if USE_SAFE else s
+
+def puts(*ss, **kw): print(*map(safe, ss), **kw)
 
 def _assert(msg, cond):
   if not cond: raise MError(msg)

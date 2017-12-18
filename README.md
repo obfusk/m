@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2017-12-17
+    Date        : 2017-12-18
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
     Version     : v0.2.1
@@ -159,7 +159,6 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 <!-- -->
 
-* only use `safe()` when stdout is a tty?
 * document `safe()` vs `--zero`
 * more file extensions!
 
