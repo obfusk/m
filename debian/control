@@ -8,6 +8,7 @@ Homepage: https://github.com/obfusk/m
 Vcs-Git: https://github.com/obfusk/m.git
 Vcs-Browser: https://github.com/obfusk/m
 X-Python3-Version: >= 3.5
+Rules-Requires-Root: no
 
 Package: mmm
 Architecture: all
