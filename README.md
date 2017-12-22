@@ -141,7 +141,6 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 * update README + version + package!
 * `ack TODO`
-* test `END_SECS`
 
 <!-- -->
 
@@ -162,6 +161,7 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 * document `safe()` vs `--zero`
 * more file extensions!
+* test `END_SECS`?
 
 <!-- -->
 

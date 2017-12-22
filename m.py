@@ -86,6 +86,8 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/z.mkv
 [x] x.mkv
 [*] y.mkv
 [>] z.mkv 0:02:01
+>>> run("next-new")
+No files to play.
 >>> run("ls", c = True)
 [GRNxNON] x.mkv
 [CYA*NON] y.mkv
@@ -182,6 +184,12 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 >>> runE("unmark b.mkv", d = d / "more")
 >>> run("ld", c = True)
 (RED1NON>BLU 1NON!) more
+>>> run("ls", d = d / "more")
+[>] a.mkv 0:04:06
+[ ] b.mkv
+>>> run("next-new", d = d / "more") # doctest: +ELLIPSIS
+Playing b.mkv ...
+RUN true vlc --fullscreen --play-and-exit -- .../media/more/b.mkv
 
 >>> run("--show-hidden ls -n")
   1 [ ] .dotfile.mkv
@@ -190,7 +198,7 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
   4 [x] z.mkv
 >>> run("--show-hidden ld")
 (     ) .dotdir
-(1> 1!) more
+(1> 0!) more
 
 >>> run("next --mpv") # doctest: +ELLIPSIS
 Playing y.mkv ...
@@ -248,7 +256,7 @@ Now, test w/ "unsafe" file & dir
 [x] y.mkv
 [x] z.mkv
 >>> run("ld")
-(1> 1!) more
+(1> 0!) more
 (     ) unsafe?dir
 >>> run("play un\033safe\x01file.mkv") # doctest: +ELLIPSIS
 Playing un?safe?file.mkv ...
@@ -296,7 +304,9 @@ subcommands:
     list (l, ls)        list files
     list-dirs (ld)      list directories
     list-all (la)       list directories & files
-    next (n)            play next file
+    next (n, continue, cont, c)
+                        play (or continue) next (playing/new) file
+    next-new (nn)       play next new file
     play (p)            play FILE
     mark (m)            mark FILE as done
     unmark (u)          mark FILE as new
@@ -445,6 +455,7 @@ EXTS          = ".avi .m4v .mkv .mp3 .mp4 .ogg .ogv".split()    # TODO
 CONT_BACK     = 5                                               # TODO
 END_SECS      = 5                                               # TODO
 PLAYER        = "vlc"
+NOFILES       = "No files to play."
 
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()      # dyn
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
@@ -459,14 +470,14 @@ INFOCHAR_L    = dict(INFOCHAR, new = "!")
 INFOCOLOUR_L  = dict(zip(INFOS, INFOCO))
 INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
 
-SKIP          = -1
-
 STDOUT_TTY    = sys.stdout.isatty()
 USE_SAFE      = STDOUT_TTY                                      # dyn
 USE_COLOUR    = STDOUT_TTY            # NB: dyn by --[no-]colour
 SHOW_HIDDEN   = False                 # NB: dyn by --show-hidden
 
 STDERR        = sys.stderr
+
+SKIP, DONE, UNMARK = -1, True, False
 
 class MError(RuntimeError): pass
 
@@ -528,15 +539,18 @@ def _argument_parser(d = {}):                                   # {{{1
   p_list_a  = _subcommand(s, "list-all la",
                           "list directories & files",
                           do_list_dir_all)
-  p_next    = _subcommand(s, "next n"   , "play next file",
+  p_next    = _subcommand(s, "next n continue cont c",
+                          "play (or continue) next (playing/new) file",
                           do_play_next)
-  p_play    = _subcommand(s, "play p"   , "play FILE",
+  p_next_n  = _subcommand(s, "next-new nn", "play next new file",
+                          do_play_next_new)
+  p_play    = _subcommand(s, "play p"     , "play FILE",
                           do_play_file)
-  p_mark    = _subcommand(s, "mark m"   , "mark FILE as done",
+  p_mark    = _subcommand(s, "mark m"     , "mark FILE as done",
                           do_mark_file)
-  p_unmark  = _subcommand(s, "unmark u" , "mark FILE as new",
+  p_unmark  = _subcommand(s, "unmark u"   , "mark FILE as new",
                           do_unmark_file)
-  p_skip    = _subcommand(s, "skip s"   , "mark FILE as skip",
+  p_skip    = _subcommand(s, "skip s"     , "mark FILE as skip",
                           do_skip_file)
   p_index   = _subcommand(s, "index i",
                           "index current directory",
@@ -566,7 +580,7 @@ def _argument_parser(d = {}):                                   # {{{1
       help = "show numbers (which can be used for mark etc.)")
     g.add_argument("--no-numbers", action = "store_false",
                    dest = "numbers")
-  for x in [p_next, p_play]:
+  for x in [p_next, p_next_n, p_play]:
     g = x.add_mutually_exclusive_group()
     g.set_defaults(player = d.get("player", PLAYER))
     g.add_argument("--mpv", action = "store_const", dest = "player",
@@ -644,8 +658,15 @@ def do_list_dir_all(dpath, fs, numbers):
 
 def do_play_next(dpath, fs, player):
   fn = dir_next(dpath, fs)
+  _play_file_if(dpath, fs, fn, player)
+
+def do_play_next_new(dpath, fs, player):
+  fn = dir_next(dpath, fs, skip = "skip done playing".split())
+  _play_file_if(dpath, fs, fn, player)
+
+def _play_file_if(dpath, fs, fn, player):
   if fn: play_file(dpath, fs, fn, player)
-  else: print("No files to play.")
+  else: print(NOFILES)
 
 def do_play_file(dpath, fs, filename, player):
   for fn in _files_from_spec(dpath, filename):
@@ -653,14 +674,14 @@ def do_play_file(dpath, fs, filename, player):
 
 def do_mark_file(dpath, _fs, filename):
   files = _files_from_spec(dpath, filename)
-  db_update(dpath, { fn: True for fn in files })
+  db_update(dpath, { fn: DONE for fn in files })
 
 def do_unmark_file(dpath, fs, filename):                        # {{{1
   files   = _files_from_spec(dpath, filename, False)
   files_  = [ fn for fn in files if fn in fs ]
   for fn in sorted(set(files) - set(files_)):
     puts("Ignoring unknown file '{}'.".format(fn), file = sys.stderr)
-  db_update(dpath, { fn: False for fn in files_ })
+  db_update(dpath, { fn: UNMARK for fn in files_ })
                                                                 # }}}1
 
 def do_skip_file(dpath, _fs, filename):
@@ -725,7 +746,7 @@ def do_dbfile(dpath, _fs):
 def do_kodi_import_watched(_dpath, _fs):
   data = defaultdict(dict)
   for p, name in kodi_path_query(KODI_WATCHED_SQL):
-    data[p][name] = True
+    data[p][name] = DONE
   for dpath, fs in data.items(): db_update(dpath, fs)
 
 def do_kodi_import_playing(_dpath, _fs):
@@ -744,7 +765,7 @@ def _state(fn, fs):
   return _state_in_db(fs[fn]) if fn in fs else "new"
 
 def _state_in_db(what):
-  return { True: "done", SKIP: "skip" }.get(what, "playing")
+  return { SKIP: "skip", DONE: "done" }.get(what, "playing")
 
 def dir_iter_dirs(dpath):                                       # {{{1
   for sd in dir_dirs(dpath):
@@ -757,9 +778,9 @@ def dir_iter_dirs(dpath):                                       # {{{1
       yield sd, None, None
                                                                 # }}}1
 
-def dir_next(dpath, fs):
+def dir_next(dpath, fs, skip = "skip done".split()):
   for fn in dir_files(dpath):
-    if fn not in fs or fs[fn] not in [True, SKIP]: return fn
+    if _state(fn, fs) not in skip: return fn
   return None
 
 def dir_dirs(dpath):
@@ -803,7 +824,7 @@ def db_load(dpath):
 def db_update(dpath, files):                                    # {{{1
   (HOME / CFG).mkdir(exist_ok = True)
   df, fs  = db_dir_file(dpath), db_load(dpath)["files"]
-  fs_     = { k:v for k,v in {**fs, **files}.items() if v != False }
+  fs_     = { k:v for k,v in {**fs, **files}.items() if v != UNMARK }
   db      = _db_check(df, dpath, dict(dir = str(dpath), files = fs_))
   with df.open("w") as f:
     json.dump(db, f, indent = 2, sort_keys = True)
@@ -815,7 +836,7 @@ def _db_check(df, dpath, db):                                   # {{{1
           sorted(db.keys()) == "dir files".split())
   _assert(str(df) + " has wrong dir", db["dir"] == str(dpath))
   _assert(str(df) + " has wrong files value(s)",
-          all( x == True or type(x) == int and (x > 0 or x == SKIP)
+          all( x == DONE or type(x) == int and (x > 0 or x == SKIP)
                for x in db["files"].values() ))
   return db
                                                                 # }}}1
@@ -829,7 +850,7 @@ def db_dir_file(dpath):
 
 def db_t(fs, fn):
   t = fs.get(fn)
-  return None if t in [True, SKIP] else t
+  return None if t in [DONE, SKIP] else t
 
 # === playing & vlc & mpv ===
 
@@ -853,8 +874,8 @@ def play_file(dpath, fs, fn, player = None):                    # {{{1
 def vlc_play(fp, t = None):
   cmd = VLCCMD + (VLCCONT(t) if t else []) + ["--", fp]
   puts("RUN", *cmd); subprocess.run(cmd, check = True)
-  t_  = vlc_get_times().get(fp) or True
-  return False if t_ == True and not prompt_yn("Done") else t_
+  t_  = vlc_get_times().get(fp) or DONE
+  return UNMARK if t_ == DONE and not prompt_yn("Done") else t_
 
 
 # TODO: cleanup?
@@ -897,7 +918,7 @@ def mpv_play(fp, t = None):                                     # {{{1
   z       =  strpt("00:00:00", "%H:%M:%S")
   t_      = (strpt(a.decode(), "%H:%M:%S") - z).seconds
   tot     = (strpt(c.decode(), "%H:%M:%S") - z).seconds
-  return t_ or False if t_ + END_SECS < tot else True
+  return t_ or UNMARK if t_ + END_SECS < tot else DONE
                                                                 # }}}1
 
 def _pty_run(cmd, testing = False, bufsize = 1024):             # {{{1
