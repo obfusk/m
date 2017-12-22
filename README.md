@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2017-12-18
+    Date        : 2017-12-22
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
     Version     : v0.2.1
@@ -141,6 +141,7 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 * update README + version + package!
 * `ack TODO`
+* test `END_SECS`
 
 <!-- -->
 

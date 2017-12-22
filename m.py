@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-18
+# Date        : 2017-12-22
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
 # Version     : v0.2.1
@@ -443,6 +443,7 @@ KODIDB        = ".kodi/userdata/Database/MyVideos107.db"
 
 EXTS          = ".avi .m4v .mkv .mp3 .mp4 .ogg .ogv".split()    # TODO
 CONT_BACK     = 5                                               # TODO
+END_SECS      = 5                                               # TODO
 PLAYER        = "vlc"
 
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()      # dyn
@@ -896,7 +897,7 @@ def mpv_play(fp, t = None):                                     # {{{1
   z       =  strpt("00:00:00", "%H:%M:%S")
   t_      = (strpt(a.decode(), "%H:%M:%S") - z).seconds
   tot     = (strpt(c.decode(), "%H:%M:%S") - z).seconds
-  return t_ or False if t_ < tot else True
+  return t_ or False if t_ + END_SECS < tot else True
                                                                 # }}}1
 
 def _pty_run(cmd, testing = False, bufsize = 1024):             # {{{1
