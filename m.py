@@ -112,6 +112,11 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/y.mkv
   1 [ ] x.mkv
   2 [ ] y.mkv
   3 [>] z.mkv 0:02:01
+>>> runE("mark playing")
+>>> run("ls -n")
+  1 [ ] x.mkv
+  2 [ ] y.mkv
+  3 [x] z.mkv
 >>> runE("skip all")
 >>> run("ls -n")
   1 [*] x.mkv
@@ -321,7 +326,8 @@ subcommands:
     kodi-import-playing
                         import playing data from kodi
 <BLANKLINE>
-NB: FILE is a file name or number(s): e.g. '1', '1-5', '1,4-7' or 'all'.
+NB: FILE is a file name, state or number(s); e.g. '1', '1-5', '1,4-7',
+'playing', 'new' or 'all'.
 
 >>> runH("ls --help")
 usage: m list [-h] [--numbers | --no-numbers]
@@ -463,12 +469,16 @@ VLCCONT       = lambda t: ["--start-time", str(int(t))]
 MPVCMD        = "mpv --fullscreen".split()                      # dyn
 MPVCONT       = lambda t: ["--start=" + str(int(t))]
 
-INFOS, INFOCH = "skip done playing new".split(), "*x> "
+STATES        = "skip done playing new".split()
+INFOCH        = "*x> "
 INFOCO        = "cya grn red blu".split()
-INFOCHAR      = dict(zip(INFOS, INFOCH))
+INFOCHAR      = dict(zip(STATES, INFOCH))
 INFOCHAR_L    = dict(INFOCHAR, new = "!")
-INFOCOLOUR_L  = dict(zip(INFOS, INFOCO))
+INFOCOLOUR_L  = dict(zip(STATES, INFOCO))
 INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
+
+FILESPEC      = re.compile("all|" + "|".join(STATES) +
+                           "|(\d+(-\d+)?,)*(\d+(-\d+)?)")
 
 STDOUT_TTY    = sys.stdout.isatty()
 USE_SAFE      = STDOUT_TTY                                      # dyn
@@ -503,8 +513,8 @@ CFG_ARGS  = dict(show_hidden = bool, colour = bool, numbers = bool,
                  player = None)                   # --> PLAYERS.keys()
 
 def _argument_parser(d = {}):                                   # {{{1
-  epilog  = """NB: FILE is a file name or number(s):
-               e.g. '1', '1-5', '1,4-7' or 'all'."""
+  epilog = """NB: FILE is a file name, state or number(s);
+              e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'."""
   p = argparse.ArgumentParser(description = DESC, epilog = epilog)
   p.add_argument("--version", action = "version",
                  version = "%(prog)s {}".format(__version__))
@@ -669,31 +679,33 @@ def _play_file_if(dpath, fs, fn, player):
   else: print(NOFILES)
 
 def do_play_file(dpath, fs, filename, player):
-  for fn in _files_from_spec(dpath, filename):
+  for fn in _files_from_spec(dpath, fs, filename):
     play_file(dpath, fs, fn, player)
 
-def do_mark_file(dpath, _fs, filename):
-  files = _files_from_spec(dpath, filename)
+def do_mark_file(dpath, fs, filename):
+  files = _files_from_spec(dpath, fs, filename)
   db_update(dpath, { fn: DONE for fn in files })
 
 def do_unmark_file(dpath, fs, filename):                        # {{{1
-  files   = _files_from_spec(dpath, filename, False)
+  files   = _files_from_spec(dpath, fs, filename, must_exist = False)
   files_  = [ fn for fn in files if fn in fs ]
   for fn in sorted(set(files) - set(files_)):
     puts("Ignoring unknown file '{}'.".format(fn), file = sys.stderr)
   db_update(dpath, { fn: UNMARK for fn in files_ })
                                                                 # }}}1
 
-def do_skip_file(dpath, _fs, filename):
-  files = _files_from_spec(dpath, filename)
+def do_skip_file(dpath, fs, filename):
+  files = _files_from_spec(dpath, fs, filename)
   db_update(dpath, { fn: SKIP for fn in files })
 
-def _files_from_spec(dpath, spec, must_exist = True):           # {{{1
+def _files_from_spec(dpath, fs, spec, must_exist = True):       # {{{1
   if any( spec.lower().endswith(ext) for ext in EXTS ):
     return [check_filename(dpath, spec, must_exist)]
-  elif re.fullmatch("all|(\d+(-\d+)?,)*(\d+(-\d+)?)", spec):
+  elif re.fullmatch(FILESPEC, spec):
     files = dir_files(dpath)
     if spec == "all": return files
+    elif spec in STATES:
+      return [ fn for fn in files if _state(fn, fs) == spec ]
     else:
       ret = set()
       for pt in spec.split(","):
