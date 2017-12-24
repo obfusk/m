@@ -48,10 +48,11 @@ and monkey-patching are not available.
 ...                      str(a): 246 }
 True
 
->>> import io
 >>> _clr = { True: "--colour", False: "--no-colour", None: "" }
 >>> def run(a, d = d, c = False):
 ...   main("-d", str(d), *(_clr[c]+" "+a).split())
+>>> def runI(s, *a, **k):
+...   with stdin_from(s): run(*a, **k)
 >>> def runO(*a, **k):
 ...   f = io.StringIO()
 ...   with contextlib.redirect_stdout(f): run(*a, **k)
@@ -59,7 +60,7 @@ True
 >>> def runE(*a, **k):
 ...   with contextlib.redirect_stderr(sys.stdout): run(*a, **k)
 >>> def runH(*a, **k):
-...   argv0 = sys.argv[0]; sys.argv[0] = "m"
+...   argv0, sys.argv[0] = sys.argv[0], "m"
 ...   try: run(*a, **k)
 ...   except SystemExit: pass
 ...   finally: sys.argv[0] = argv0
@@ -340,6 +341,55 @@ Error: '/.../more/a.mkv' is not a file in '/.../media'
 Error: '/.../bar.mkv' is not a file in '/.../media'
 
 
+Now, check importing
+--------------------
+
+>>> watched = '''
+... /some/watched/file/1.mkv
+... /some/watched/file/2.mkv
+... /some/other/watched/file/foo.mkv
+... /old/dir/some/file/a.mp4
+... /old/dir/some/file/b.mp4
+... '''.strip("\n")
+>>> playing = '''
+... /some/file/to_skip/x.mkv 404
+... /some/playing/file/1.mkv 0:01:01
+... /some/playing/file/2.mkv 0:02:01
+... /some/other/playing/file/bar.mkv 101
+... '''.lstrip("\n").replace("\n", "\0")
+>>> playing # doctest: +ELLIPSIS
+'/some/file/to_skip/x.mkv 404\x00...bar.mkv 101\x00'
+
+>>> runI(watched, r"import-watched --replace \A/old(/dir/) /new\1")
+Imported 5 file(s) in 3 dir(s).
+>>> run("watched") # doctest: +ELLIPSIS
+/new/dir/some/file:
+  a.mp4
+  b.mp4
+/some/other/watched/file:
+  foo.mkv
+/some/watched/file:
+  1.mkv
+  2.mkv
+/.../media:
+  Y_.mkv
+  un?safe?file.mkv
+  x.mkv
+  z.mkv
+/.../media/more:
+  b.mkv
+>>> runI(playing, "import-playing --zero --exclude /to_skip/")
+Imported 3 file(s) in 2 dir(s).
+>>> run("playing") # doctest: +ELLIPSIS
+/some/other/playing/file:
+  bar.mkv 0:01:41
+/some/playing/file:
+  1.mkv 0:01:01
+  2.mkv 0:02:01
+/.../media/more:
+  a.mkv 0:04:06
+
+
 Now, check --help
 -----------------
 
@@ -382,10 +432,14 @@ subcommands:
     skipped             list files marked as skip
     todo (unfinished)   list directories with files marked as playing or new
     db-file             print path to DB file
+    import-watched      import watched data from stdin
+    import-playing      import playing data from stdin
     kodi-import-watched
                         import watched data from kodi
     kodi-import-playing
                         import playing data from kodi
+    kodi-watched-sql    print SQL for getting watched data from kodi
+    kodi-playing-sql    print SQL for getting playing data from kodi
 <BLANKLINE>
 NB: FILE is a file name, state or number(s);
 e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'.
@@ -505,8 +559,8 @@ MError: config.json has unexpected value(s)
 """
                                                                 # }}}1
 
-import argparse, contextlib, datetime, inspect, hashlib, json, pty, \
-       os, re, subprocess, sys, textwrap, urllib
+import argparse, contextlib, datetime, inspect, hashlib, io, json, \
+       pty, os, re, subprocess, sys, textwrap, urllib
 
 from collections import defaultdict
 from pathlib import Path
@@ -525,7 +579,9 @@ EXTS          = ".avi .m4v .mkv .mp3 .mp4 .ogg .ogv".split()    # TODO
 CONT_BACK     = 5                                               # TODO
 END_SECS      = 5                                               # TODO
 PLAYER        = "vlc"
+
 NOFILES       = "No files to play."
+IMPORTED      = "Imported {} file(s) in {} dir(s)."
 
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()      # dyn
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
@@ -562,6 +618,12 @@ EPILOG = textwrap.dedent("""
   please use the same sort order when listing and using numbers.
 """)
 
+RX_EPILOG = """
+  See
+  https://docs.python.org/3/library/re.html#regular-expression-syntax
+  for the Python regular expression syntax.
+"""
+
 class MError(RuntimeError): pass
 
 # === main & related functions ===
@@ -582,7 +644,8 @@ def main(*args):                                                # {{{1
                                                                 # }}}1
 
 DO_ARGS   = "numbers only_indexed todo player " \
-            "filename flat zero only_files only_dirs".split()
+            "filename flat zero only_files only_dirs sep " \
+            "replace replace_all include exclude".split()
 CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
                  numbers = bool, only_indexed = bool, player = None)
           # player --> PLAYERS.keys()
@@ -632,6 +695,7 @@ def _argument_parser(d = {}):                                   # {{{1
   p_list_a  = _subcommand(s, "list-all la",
                           "list directories & files",
                           do_list_dir_all)
+
   p_next    = _subcommand(s, "next n continue cont c",
                           "play (or continue) next (playing/new) file",
                           do_play_next)
@@ -639,33 +703,51 @@ def _argument_parser(d = {}):                                   # {{{1
                           do_play_next_new)
   p_play    = _subcommand(s, "play p"     , "play FILE",
                           do_play_file)
+
   p_mark    = _subcommand(s, "mark m"     , "mark FILE as done",
                           do_mark_file)
   p_unmark  = _subcommand(s, "unmark u"   , "mark FILE as new",
                           do_unmark_file)
   p_skip    = _subcommand(s, "skip s"     , "mark FILE as skip",
                           do_skip_file)
+
   p_index   = _subcommand(s, "index i",
                           "index current directory",
                           do_index_dir)
+
   p_playing = _subcommand(s, "playing", "list files marked as playing",
                           do_playing_files)
   p_watched = _subcommand(s, "watched", "list files marked as done",
                           do_watched_files)
   p_skipped = _subcommand(s, "skipped", "list files marked as skip",
                           do_skipped_files)
+
   p_todo    = _subcommand(s, "todo unfinished",
                           "list directories with files marked as "
                           "playing or new",
                           do_todo_dirs)
+
   p_dbfile  = _subcommand(s, "db-file", "print path to DB file",
                           do_dbfile)
+
+  p_imp_w   = _subcommand(s, "import-watched",
+                          "import watched data from stdin",
+                          do_import_watched)
+  p_imp_p   = _subcommand(s, "import-playing",
+                          "import playing data from stdin",
+                          do_import_playing)
   p_kodi_w  = _subcommand(s, "kodi-import-watched",
                           "import watched data from kodi",
                           do_kodi_import_watched)
   p_kodi_p  = _subcommand(s, "kodi-import-playing",
                           "import playing data from kodi",
                           do_kodi_import_playing)
+  p_kodi_ws = _subcommand(s, "kodi-watched-sql",
+                          "print SQL for getting watched data from kodi",
+                          do_kodi_watched_sql)
+  p_kodi_ps = _subcommand(s, "kodi-playing-sql",
+                          "print SQL for getting playing data from kodi",
+                          do_kodi_playing_sql)
 
   p_test    = s.add_parser("_test")
   p_test.add_argument("--verbose", "-v", action = "store_true")
@@ -688,6 +770,7 @@ def _argument_parser(d = {}):                                   # {{{1
       g.add_argument("--todo", "-t", action = "store_true",
                      help = "only show indexed directories with "
                             "files marked as playing or new")
+
   for x in [p_next, p_next_n, p_play]:
     g = x.add_mutually_exclusive_group()
     g.set_defaults(player = d.get("player", PLAYER))
@@ -708,13 +791,41 @@ def _argument_parser(d = {}):                                   # {{{1
   p_todo.add_argument("--only-dirs", action = "store_true",
                       help = "only print directories, no info")
 
+  for x in [p_imp_w, p_imp_p]:
+    x.add_argument("--zero", action = "store_true",
+      help = "zero-delimited input (from e.g. find -print0)")
+  p_imp_p.set_defaults(sep = " ")
+  p_imp_p.add_argument("--sep",
+    help = "use SEP to separate path from time (instead of ' ')")
+  for x in [p_kodi_w, p_kodi_p]:
+    x.add_argument("--from", dest = "filename", metavar = "FILE",
+                   help = "import from FILE (instead of ~/{})"
+                          .format(KODIDB))
+  for x in [p_imp_w, p_imp_p, p_kodi_w, p_kodi_p]:
+    repl_help = """
+      rename files: substitute the first occurence of REGEX in each
+      file path with REPLACEMENT; NB: renaming is done after filtering
+      (i.e. --include or --exclude)
+    """
+    g1 = x.add_mutually_exclusive_group()
+    g1.add_argument("--replace", nargs = 2, help = repl_help,
+                    metavar = ("REGEX", "REPLACEMENT"))
+    g1.add_argument("--replace-all", nargs = 2,
+                    metavar = ("REGEX", "REPLACEMENT"),
+      help = "rename file like --replace, but replace all occurences")
+    g2 = x.add_mutually_exclusive_group()
+    g2.add_argument("--include", metavar = "REGEX",
+      help = "ignore files whose path does not match REGEX")
+    g2.add_argument("--exclude", metavar = "REGEX",
+      help = "ignore files whose path matches REGEX")
   return p
                                                                 # }}}1
 
-def _subcommand(s, names, desc, f):                             # {{{1
+def _subcommand(s, names, desc, f, **kw):                       # {{{1
   name, *aliases = names.split()
+  if "import" in name: kw["epilog"] = RX_EPILOG
   p = s.add_parser(name, aliases = aliases, help = desc,
-                   description = desc)
+                   description = desc, **kw)
   p.set_defaults(f = f)
   return p
                                                                 # }}}1
@@ -874,17 +985,57 @@ def do_todo_dirs(_dpath, _fs, only_dirs):                       # {{{1
 def do_dbfile(dpath, _fs):
   puts(str(db_dir_file(dpath)))
 
-def do_kodi_import_watched(_dpath, _fs):
-  data = defaultdict(dict)
-  for p, name in kodi_path_query(KODI_WATCHED_SQL):
-    data[p][name] = DONE
-  for dpath, fs in data.items(): db_update(dpath, fs)
+def do_import_watched(_dpath, _fs, zero, replace, replace_all,
+                      include, exclude):
+  _import(replace, replace_all, include, exclude,
+          map(Path, zlines(osep = "") if zero else _lines()))
 
-def do_kodi_import_playing(_dpath, _fs):
+def do_import_playing(_dpath, _fs, zero, sep, replace, replace_all,
+                      include, exclude):
+  _import(replace, replace_all, include, exclude,
+          ( _time_line(line, sep)
+            for line in (zlines(osep = "") if zero else _lines()) ))
+
+def _lines(): return ( line.rstrip("\n") for line in sys.stdin )
+
+def _time_line(line, sep):
+  p, t = line.rsplit(sep, maxsplit = 1)
+  return Path(p), s2secs(t) if ":" in t else int(t)
+
+def _import(repl, repl_all, incl, excl, it, state = DONE):      # {{{1
+  assert not repl     or len(repl    ) == 2
+  assert not repl_all or len(repl_all) == 2
   data = defaultdict(dict)
-  for p, name, t in kodi_path_query(KODI_PLAYING_SQL):
-    data[p][name] = int(t)
+  for x in it:
+    if isinstance(x, Path):
+      fp, st = x, state
+    else:
+      fp, t = x; st = int(t)
+    assert isinstance(fp, Path)
+    if incl and not re.search(incl, str(fp)): continue
+    if excl and     re.search(excl, str(fp)): continue
+    if repl:        fp = Path(re.sub(*repl, str(fp), 1))        # !!!
+    elif repl_all:  fp = Path(re.sub(*repl, str(fp)))
+    data[fp.parent][fp.name] = st
   for dpath, fs in data.items(): db_update(dpath, fs)
+  print(IMPORTED.format(sum(map(len, data.values())), len(data)))
+                                                                # }}}1
+
+def do_kodi_import_watched(_dpath, _fs, filename, replace,
+                           replace_all, include, exclude):
+  _import(replace, replace_all, include, exclude,
+          kodi_path_query(KODI_WATCHED_SQL, filename))
+
+def do_kodi_import_playing(_dpath, _fs, filename, replace,
+                           replace_all, include, exclude):
+  _import(replace, replace_all, include, exclude,
+          kodi_path_query(KODI_PLAYING_SQL, filename))
+
+def do_kodi_watched_sql(_dpath, _fs):
+  print(KODI_WATCHED_SQL.strip("\n"))
+
+def do_kodi_playing_sql(_dpath, _fs):
+  print(KODI_PLAYING_SQL.strip("\n"))
 
 # === dir_* ===
 
@@ -1052,12 +1203,9 @@ def mpv_play(fp, t = None):                                     # {{{1
   puts("RUN", *cmd)
   b       = _pty_run(cmd, testing)[0]
   if testing: b = _MPV_TEST_OUT.format(fp).encode()
-  strpt   = datetime.datetime.strptime
   x       = b[b.rindex(b"AV:"):b.rindex(b"A-V:")][4:-1]
   a, b    = x.split(b" / "); c = b.split()[0]
-  z       =  strpt("00:00:00", "%H:%M:%S")
-  t_      = (strpt(a.decode(), "%H:%M:%S") - z).seconds
-  tot     = (strpt(c.decode(), "%H:%M:%S") - z).seconds
+  t_, tot = s2secs(a.decode()), s2secs(c.decode())
   return t_ or UNMARK if t_ + END_SECS < tot else DONE
                                                                 # }}}1
 
@@ -1144,11 +1292,14 @@ def sorted_i(xs, key = None):
   k = lambda x: (x.lower(), x)
   return sorted(xs, key = (lambda x: k(key(x))) if key else k)
 
+def s2dt(s): return datetime.datetime.strptime(s, "%H:%M:%S")
+def s2secs(s): return (s2dt(s) - s2dt("00:00:00")).seconds
+
 # === kodi ===
 
-def kodi_query(sql):                                            # {{{1
+def kodi_query(sql, filename = None):                           # {{{1
   import sqlite3
-  conn = sqlite3.connect(str(HOME / KODIDB))
+  conn = sqlite3.connect(filename or str(HOME / KODIDB))
   try:
     c = conn.cursor(); c.execute(sql)
     for row in c: yield row
@@ -1157,10 +1308,10 @@ def kodi_query(sql):                                            # {{{1
                                                                 # }}}1
 
 # NB: first element in row must be a path
-def kodi_path_query(sql):
-  for row in kodi_query(sql):
+def kodi_path_query(sql, filename = None):
+  for row in kodi_query(sql, filename):
     p = Path(row[0])
-    yield(p.parent, p.name, *row[1:])
+    yield p if len(row) == 1 else (p, *row[1:])
 
 KODI_WATCHED_SQL = """
 select p.strPath || f.strFileName as fp
@@ -1226,6 +1377,33 @@ def dyn(d, **kw):                                               # {{{1
     yield
   finally:
     d.update(old)
+                                                                # }}}1
+
+# === null-byte-separated files ===
+
+def zlines(f = None, sep = "\0", osep = None, size = 8192):     # {{{1
+  """File iterator that uses alternative line terminators."""
+  if f is None: f = sys.stdin
+  if osep is None: osep = sep
+  buf = ""
+  while True:
+    chars = f.read(size)
+    if not chars: break
+    buf += chars; lines = buf.split(sep); buf = lines.pop()
+    for line in lines: yield line + osep
+  if buf: yield buf
+                                                                # }}}1
+
+# === stdio ===
+
+@contextlib.contextmanager
+def stdin_from(f):                                              # {{{1
+  if isinstance(f, str): f = io.StringIO(f)
+  old_stdin, sys.stdin = sys.stdin, f
+  try:
+    yield
+  finally:
+    sys.stdin = old_stdin
                                                                 # }}}1
 
 # === entry point ===

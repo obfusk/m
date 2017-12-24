@@ -146,12 +146,6 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 <!-- -->
 
-* `m import-{playing,watched} [--zero]`?
-* `m kodi-*-sql`?
-* `m kodi-import-* [--replace] [--include] [--exclude]`?
-
-<!-- -->
-
 * more file extensions!
 * document `safe()` vs `--zero`
 
@@ -164,6 +158,7 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 <!-- -->
 
+* `--config-dir`?
 * test `END_SECS`?
 * note usage of dyn vars?
 
