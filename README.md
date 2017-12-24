@@ -62,7 +62,7 @@ $ m ld    # list dirs (shows #playing, #new for indexed subdirectories)
 
 Commands include: `list`/`ls`, `list-dirs`/`ld`, `list-all`/`la`,
 `next`, `play FILE`, `mark FILE`, `unmark FILE`, `skip FILE`, `index`,
-`playing`, `watched`, `skipped`.
+`playing`, `watched`, `skipped`, `todo`.
 
 See also the tests in the source code for more examples.
 
@@ -146,15 +146,16 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 <!-- -->
 
-* `m unfinished`
-
-<!-- -->
-
 * `m import-{playing,watched} [--zero]`?
 * `m kodi-*-sql`?
 * `m kodi-import-* [--replace] [--include] [--exclude]`?
 
 <!-- -->
+
+* more file extensions!
+* document `safe()` vs `--zero`
+
+### Maybe
 
 * `m --virtual foo/bar {ls,...}` + `m virt [--update] [--title]*
   [--url]* [--url-template] [--episodes] [--browser]` +
@@ -163,8 +164,6 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 <!-- -->
 
-* document `safe()` vs `--zero`
-* more file extensions!
 * test `END_SECS`?
 * note usage of dyn vars?
 

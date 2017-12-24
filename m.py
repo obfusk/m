@@ -202,6 +202,24 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 Playing b.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/more/b.mkv
 
+>>> run("ld")
+(     ) More_
+(1> 0!) more
+>>> run("ld -x")
+(1> 0!) more
+>>> runE("index", d = d / "More_")
+>>> run("ld")
+(   0!) More_
+(1> 0!) more
+>>> run("ld --todo")
+(1> 0!) more
+>>> run("todo") # doctest: +ELLIPSIS
+(   1!) /.../media
+(1> 0!) /.../media/more
+>>> run("todo --only-dirs") # doctest: +ELLIPSIS
+/.../media
+/.../media/more
+
 >>> run("--show-hidden ls -n")
   1 [ ] .dotfile.mkv
   2 [*] x.mkv
@@ -210,8 +228,9 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/b.mkv
 >>> run("--show-hidden -i ld")
 (     ) .dotdir
 (1> 0!) more
-(     ) More_
+(   0!) More_
 >>> run("--show-hidden ld --only-indexed")
+(   0!) More_
 (1> 0!) more
 
 >>> run("next --mpv") # doctest: +ELLIPSIS
@@ -256,6 +275,7 @@ RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 [x] z.mkv
 >>> run("ld")
 (1> 0!) more
+(   0!) More_
 
 >>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps({}))
 
@@ -297,7 +317,7 @@ Now, test w/ "unsafe" file & dir
 [ ] y.mkv
 [x] z.mkv
 >>> run("ld")
-(     ) More_
+(   0!) More_
 (1> 0!) more
 (     ) unsafe?dir
 >>> run("play un\033safe\x01file.mkv") # doctest: +ELLIPSIS
@@ -360,6 +380,7 @@ subcommands:
     playing             list files marked as playing
     watched             list files marked as done
     skipped             list files marked as skip
+    todo (unfinished)   list directories with files marked as playing or new
     db-file             print path to DB file
     kodi-import-watched
                         import watched data from kodi
@@ -560,8 +581,8 @@ def main(*args):                                                # {{{1
       return 1
                                                                 # }}}1
 
-DO_ARGS   = "numbers only_indexed player " \
-            "filename flat zero only_files".split()
+DO_ARGS   = "numbers only_indexed todo player " \
+            "filename flat zero only_files only_dirs".split()
 CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
                  numbers = bool, only_indexed = bool, player = None)
           # player --> PLAYERS.keys()
@@ -633,6 +654,10 @@ def _argument_parser(d = {}):                                   # {{{1
                           do_watched_files)
   p_skipped = _subcommand(s, "skipped", "list files marked as skip",
                           do_skipped_files)
+  p_todo    = _subcommand(s, "todo unfinished",
+                          "list directories with files marked as "
+                          "playing or new",
+                          do_todo_dirs)
   p_dbfile  = _subcommand(s, "db-file", "print path to DB file",
                           do_dbfile)
   p_kodi_w  = _subcommand(s, "kodi-import-watched",
@@ -659,6 +684,10 @@ def _argument_parser(d = {}):                                   # {{{1
                    help = "only show indexed directories")
     g.add_argument("--no-only-indexed", action = "store_false",
                    dest = "only_indexed")
+    if x is p_list_d:
+      g.add_argument("--todo", "-t", action = "store_true",
+                     help = "only show indexed directories with "
+                            "files marked as playing or new")
   for x in [p_next, p_next_n, p_play]:
     g = x.add_mutually_exclusive_group()
     g.set_defaults(player = d.get("player", PLAYER))
@@ -675,7 +704,9 @@ def _argument_parser(d = {}):                                   # {{{1
       help = "zero-delimited (implies --flat) output "
              "(for e.g. xargs -0)")
   p_playing.add_argument("--only-files", action = "store_true",
-      help = "only print files, not times")
+                         help = "only print files, not times")
+  p_todo.add_argument("--only-dirs", action = "store_true",
+                      help = "only print directories, no info")
 
   return p
                                                                 # }}}1
@@ -703,11 +734,14 @@ def _test(verbose = False):                                     # {{{1
       return 0 if failures == 0 else 1
                                                                 # }}}1
 
-def do_something(f, dpath, ns):
+def do_something(f, dpath, ns):                                 # {{{1
   params  = inspect.signature(f).parameters
   kw      = { k:v for k,v in vars(ns).items()
                   if k in DO_ARGS and k in params }
-  return f(dpath, db_load(dpath)["files"], **kw)
+  fs      = db_load(dpath)["files"] \
+            if not list(params)[1].startswith("_") else None
+  return f(dpath, fs, **kw)
+                                                                # }}}1
 
 # === do_* ===
 
@@ -720,9 +754,13 @@ def do_list_dir_files(dpath, fs, numbers):                      # {{{1
     print(*o)
                                                                 # }}}1
 
-def do_list_dir_dirs(dpath, _fs, only_indexed):                 # {{{1
-  for sd, p, n in dir_iter_dirs(dpath):
-    if only_indexed and None in [p, n]: continue
+def do_list_dir_dirs(dpath, _fs, only_indexed, todo = False):
+  _list_dir_dirs(dir_iter_dirs(dpath), only_indexed, todo)
+
+def _list_dir_dirs(it, only_indexed = False, todo = False):     # {{{1
+  for sd, p, n in it:
+    if (only_indexed or todo) and None in [p, n]: continue
+    if todo and not p+n: continue
     pl = _linfo(p, "playing", 1, p)
     ne = _linfo(n, "new"    , 2, n is not None)
     print("(" + pl + ne + ")", safe(sd))
@@ -802,12 +840,11 @@ def do_watched_files(_dpath, _fs, flat, zero):
 def do_skipped_files(_dpath, _fs, flat, zero):
   _print_files_with_state("skip", flat, zero)
 
-# TODO: ignore case?
 def _print_files_with_state(st, flat, zero, w_t = False):       # {{{1
   data = _files_with_state(st)
-  for dpath_s in sorted(data):
+  for dpath_s in sorted_(data):
     if not (flat or zero): puts(dpath_s + ":")
-    for fn, what in sorted(data[dpath_s]):
+    for fn, what in sorted_(data[dpath_s], key = lambda x: x[0]):
       x = str(Path(dpath_s) / fn) if flat or zero else "  " + fn
       s = safe(x) if not zero else x
       t = " " + fmt_time(what) if w_t else ""
@@ -816,12 +853,22 @@ def _print_files_with_state(st, flat, zero, w_t = False):       # {{{1
 
 def _files_with_state(st):                                      # {{{1
   data = defaultdict(list)
-  for df in (HOME / CFG).glob("dir__*.json"):
-    with df.open() as f:
-      db = json.load(f); dpath_s, fs = db["dir"], db["files"]
-      for fn, what in fs.items():
-        if _state_in_db(what) == st: data[dpath_s].append((fn, what))
+  for dpath_s, fs in db_dirs():
+    for fn, what in fs.items():
+      if _state_in_db(what) == st: data[dpath_s].append((fn, what))
   return data
+                                                                # }}}1
+
+def do_todo_dirs(_dpath, _fs, only_dirs):                       # {{{1
+  data = {}
+  for dpath_s, fs in db_dirs():
+    count = _dir_count(dir_iter(Path(dpath_s), fs))
+    if count["playing"] + count["new"]:
+      data[dpath_s] = (count["playing"], count["new"])
+  if only_dirs:
+    for d in sorted_(data): puts(d)
+  else:
+    _list_dir_dirs( (d, *data[d]) for d in sorted_(data) )
                                                                 # }}}1
 
 def do_dbfile(dpath, _fs):
@@ -854,13 +901,17 @@ def _state_in_db(what):
 def dir_iter_dirs(dpath):                                       # {{{1
   for sd in dir_dirs(dpath):
     if db_dir_file(dpath / sd).exists():
-      info = dict(playing = 0, new = 0)
-      for st, _ in dir_iter(dpath / sd):
-        if st in info: info[st] += 1
-      yield sd, info["playing"], info["new"]
+      count = _dir_count(dir_iter(dpath / sd))
+      yield sd, count["playing"], count["new"]
     else:
       yield sd, None, None
                                                                 # }}}1
+
+def _dir_count(it):
+  count = dict(playing = 0, new = 0)
+  for st, _ in it:
+    if st in count: count[st] += 1
+  return count
 
 def dir_next(dpath, fs, skip = "skip done".split()):
   for fn in dir_files(dpath):
@@ -935,6 +986,11 @@ def db_dir_file(dpath):
 def db_t(fs, fn):
   t = fs.get(fn)
   return None if t in [DONE, SKIP] else t
+
+def db_dirs():
+  for df in (HOME / CFG).glob("dir__*.json"):
+    with df.open() as f: db = json.load(f)
+    yield db["dir"], db["files"]
 
 # === playing & vlc & mpv ===
 
@@ -1081,8 +1137,12 @@ def puts(*ss, **kw): print(*map(safe, ss), **kw)
 def _assert(msg, cond):
   if not cond: raise MError(msg)
 
-def sorted_ (xs): return sorted_i(xs) if IGNORECASE else sorted(xs)
-def sorted_i(xs): return sorted(xs, key = lambda x: (x.lower(), x))
+def sorted_(xs, **kw):
+  return (sorted_i if IGNORECASE else sorted)(xs, **kw)
+
+def sorted_i(xs, key = None):
+  k = lambda x: (x.lower(), x)
+  return sorted(xs, key = (lambda x: k(key(x))) if key else k)
 
 # === kodi ===
 
