@@ -158,6 +158,7 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 
 <!-- -->
 
+* test edge cases/failures?
 * `--config-dir`?
 * test `END_SECS`?
 * note usage of dyn vars?
