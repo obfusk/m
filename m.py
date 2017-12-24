@@ -335,6 +335,7 @@ Error: '/foo/bar/baz.mkv' does not start with '/.../media'
 Error: '/.../nonexistent.mkv' is not a file
 >>> runE("unmark nonexistent.mkv")
 Ignoring unknown file 'nonexistent.mkv'.
+>>> runE("unmark nonexistent.mkv --quiet")
 >>> runE("mark more/a.mkv") # doctest: +ELLIPSIS
 Error: '/.../more/a.mkv' is not a file in '/.../media'
 >>> runE("unmark foo/bar.mkv") # doctest: +ELLIPSIS
@@ -348,8 +349,8 @@ Now, check importing
 ... /some/watched/file/1.mkv
 ... /some/watched/file/2.mkv
 ... /some/other/watched/file/foo.mkv
-... /old/dir/some/file/a.mp4
-... /old/dir/some/file/b.mp4
+... /some/old/dir/some/file/a.mp4
+... /some/old/dir/some/file/b.mp4
 ... '''.strip("\n")
 >>> playing = '''
 ... /some/file/to_skip/x.mkv 404
@@ -360,10 +361,10 @@ Now, check importing
 >>> playing # doctest: +ELLIPSIS
 '/some/file/to_skip/x.mkv 404\x00...bar.mkv 101\x00'
 
->>> runI(watched, r"import-watched --replace \A/old(/dir/) /new\1")
+>>> runI(watched, r"import-watched --replace (?<=\A/some/)old(?=/dir/) new")
 Imported 5 file(s) in 3 dir(s).
 >>> run("watched") # doctest: +ELLIPSIS
-/new/dir/some/file:
+/some/new/dir/some/file:
   a.mp4
   b.mp4
 /some/other/watched/file:
@@ -388,6 +389,17 @@ Imported 3 file(s) in 2 dir(s).
   2.mkv 0:02:01
 /.../media/more:
   a.mkv 0:04:06
+>>> runE("todo") # doctest: +ELLIPSIS
+Ignoring nonexistent directory '/some/new/dir/some/file'.
+Ignoring nonexistent directory '/some/other/playing/file'.
+Ignoring nonexistent directory '/some/other/watched/file'.
+Ignoring nonexistent directory '/some/playing/file'.
+Ignoring nonexistent directory '/some/watched/file'.
+(   1!) /.../media
+(1> 0!) /.../media/more
+>>> runE("todo --quiet") # doctest: +ELLIPSIS
+(   1!) /.../media
+(1> 0!) /.../media/more
 
 
 Now, check --help
@@ -584,6 +596,8 @@ PLAYER        = "vlc"
 
 NOFILES       = "No files to play."
 IMPORTED      = "Imported {} file(s) in {} dir(s)."
+IGNORE_UNK    = "Ignoring unknown file '{}'."
+IGNORE_NODIR  = "Ignoring nonexistent directory '{}'."
 
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()      # dyn
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
@@ -646,8 +660,8 @@ def main(*args):                                                # {{{1
                                                                 # }}}1
 
 DO_ARGS   = "numbers only_indexed todo player " \
-            "filename flat zero only_files only_dirs sep " \
-            "replace replace_all include exclude".split()
+            "filename flat zero only_files only_dirs quiet " \
+            "sep replace replace_all include exclude".split()
 CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
                  numbers = bool, only_indexed = bool, player = None)
           # player --> PLAYERS.keys()
@@ -794,6 +808,10 @@ def _argument_parser(d = {}):                                   # {{{1
                          help = "only print files, not times")
   p_todo.add_argument("--only-dirs", action = "store_true",
                       help = "only print directories, no info")
+  p_unmark.add_argument("--quiet", "-q", action = "store_true",
+    help = "do not print info about unknown files to stderr")
+  p_todo  .add_argument("--quiet", "-q", action = "store_true",
+    help = "do not print info about missing directories to stderr")
 
   for x in [p_imp_w, p_imp_p]:
     x.add_argument("--zero", action = "store_true",
@@ -910,11 +928,12 @@ def do_mark_file(dpath, fs, filename):
   files = _files_from_spec(dpath, fs, filename)
   db_update(dpath, { fn: DONE for fn in files })
 
-def do_unmark_file(dpath, fs, filename):                        # {{{1
+def do_unmark_file(dpath, fs, filename, quiet):                 # {{{1
   files   = _files_from_spec(dpath, fs, filename, must_exist = False)
   files_  = [ fn for fn in files if fn in fs ]
-  for fn in sorted_(set(files) - set(files_)):
-    puts("Ignoring unknown file '{}'.".format(fn), file = sys.stderr)
+  if not quiet:
+    for fn in sorted_(set(files) - set(files_)):
+      puts(IGNORE_UNK.format(fn), file = sys.stderr)
   db_update(dpath, { fn: UNMARK for fn in files_ })
                                                                 # }}}1
 
@@ -974,12 +993,18 @@ def _files_with_state(st):                                      # {{{1
   return data
                                                                 # }}}1
 
-def do_todo_dirs(_dpath, _fs, only_dirs):                       # {{{1
-  data = {}
+def do_todo_dirs(_dpath, _fs, only_dirs, quiet):                # {{{1
+  data, nodir = {}, []
   for dpath_s, fs in db_dirs():
-    count = _dir_count(dir_iter(Path(dpath_s), fs))
+    dpath = Path(dpath_s)
+    if not dpath.exists():
+      nodir.append(dpath_s); continue
+    count = _dir_count(dir_iter(dpath, fs))
     if count["playing"] + count["new"]:
       data[dpath_s] = (count["playing"], count["new"])
+  if not quiet:
+    for dpath_s in sorted_(nodir):
+      puts(IGNORE_NODIR.format(dpath_s), file = sys.stderr)
   if only_dirs:
     for d in sorted_(data): puts(d)
   else:
