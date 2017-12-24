@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2017-12-22
+    Date        : 2017-12-24
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
     Version     : v0.2.1
@@ -131,7 +131,9 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 ```json
 {
   "colour": true,
+  "ignorecase": true,
   "numbers": true,
+  "only_indexed": true,
   "player": "mpv",
   "show_hidden": true
 }
@@ -145,7 +147,12 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 <!-- -->
 
 * `m unfinished`
-* `m l[da] --only-indexed`
+
+<!-- -->
+
+* `m import-{playing,watched} [--zero]`?
+* `m kodi-*-sql`?
+* `m kodi-import-* [--replace] [--include] [--exclude]`?
 
 <!-- -->
 
@@ -153,15 +160,13 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
   [--url]* [--url-template] [--episodes] [--browser]` +
   `VIRTUAL:/foo/bar` + `virt__*.json` + `m {watching,...}
   --include-virtual`?
-* `m import-{playing,watched} [--zero]`?
-* `m kodi-*-sql`?
-* `m kodi-import-* [--replace] [--include] [--exclude]`?
 
 <!-- -->
 
 * document `safe()` vs `--zero`
 * more file extensions!
 * test `END_SECS`?
+* note usage of dyn vars?
 
 <!-- -->
 
@@ -172,6 +177,7 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 * kodi db export/sync?
 * sign pypi package?
 * fix `.exist()` race conditions?
+* use `locale.strcoll` vs `--ignorecase`?
 
 ## License
 

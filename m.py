@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-22
+# Date        : 2017-12-24
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
 # Version     : v0.2.1
@@ -35,7 +35,8 @@ and monkey-patching are not available.
 >>> x, y, z, a, b = d / "x.mkv", d / "y.mkv", d / "z.mkv", \
 ...                 d / "more/a.mkv", d / "more/b.mkv"
 
->>> for _d in [d, d / "more", FAKE_HOME, FAKE_HOME / CFG]: _d.mkdir()
+>>> for _d in [d, d / "more", d / "More_", FAKE_HOME, FAKE_HOME / CFG]:
+...   _d.mkdir()
 >>> for _f in [x, y, z, a, b]: _f.touch()
 >>> (FAKE_HOME / VLCQT).parent.mkdir(parents = True)
 
@@ -168,10 +169,12 @@ No files to play.
 [x] z.mkv
 
 >>> run("ld")
+(     ) More_
 (     ) more
 >>> runE("index", d = d / "more")
->>> run("ld")
+>>> run("-i ld")
 (   2!) more
+(     ) More_
 >>> run("ls", d = d / "more")
 [ ] a.mkv
 [ ] b.mkv
@@ -179,15 +182,18 @@ No files to play.
 Playing a.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/more/a.mkv
 >>> runE("mark b.mkv", d = d / "more")
->>> run("la")
+>>> run("-i la")
 (1> 0!) more
+(     ) More_
 [*] x.mkv
 [ ] y.mkv
 [x] z.mkv
 >>> run("ld", c = True)
+(     ) More_
 (RED1NON>YLL 0NON!) more
 >>> runE("unmark b.mkv", d = d / "more")
 >>> run("ld", c = True)
+(     ) More_
 (RED1NON>BLU 1NON!) more
 >>> run("ls", d = d / "more")
 [>] a.mkv 0:04:06
@@ -201,8 +207,11 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/more/b.mkv
   2 [*] x.mkv
   3 [ ] y.mkv
   4 [x] z.mkv
->>> run("--show-hidden ld")
+>>> run("--show-hidden -i ld")
 (     ) .dotdir
+(1> 0!) more
+(     ) More_
+>>> run("--show-hidden ld --only-indexed")
 (1> 0!) more
 
 >>> run("next --mpv") # doctest: +ELLIPSIS
@@ -226,8 +235,8 @@ RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 Now, test w/ config.json
 ------------------------
 
->>> cfg = dict(show_hidden = True, colour = True, numbers = True,
-...            player = "mpv")
+>>> cfg = dict(colour = True, ignorecase = True, numbers = True,
+...            only_indexed = True, player = "mpv", show_hidden = True)
 >>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps(cfg))
 
 >>> run("ls", c = None)
@@ -245,8 +254,34 @@ RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 [*] x.mkv
 [x] y.mkv
 [x] z.mkv
+>>> run("ld")
+(1> 0!) more
 
 >>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps({}))
+
+
+Now, test sorting
+-----------------
+
+>>> (d / "Y_.mkv").touch()
+
+>>> run("ls --numbers")
+  1 [ ] Y_.mkv
+  2 [*] x.mkv
+  3 [x] y.mkv
+  4 [x] z.mkv
+>>> runE("unmark 3")
+>>> run("-i ls --numbers")
+  1 [*] x.mkv
+  2 [ ] y.mkv
+  3 [ ] Y_.mkv
+  4 [x] z.mkv
+>>> runE("-i mark 1,3")
+>>> run("-i ls --numbers")
+  1 [x] x.mkv
+  2 [ ] y.mkv
+  3 [x] Y_.mkv
+  4 [x] z.mkv
 
 
 Now, test w/ "unsafe" file & dir
@@ -256,11 +291,13 @@ Now, test w/ "unsafe" file & dir
 >>> (d / "unsafe\ndir").mkdir()
 
 >>> run("ls")
+[x] Y_.mkv
 [ ] un?safe?file.mkv
-[*] x.mkv
-[x] y.mkv
+[x] x.mkv
+[ ] y.mkv
 [x] z.mkv
 >>> run("ld")
+(     ) More_
 (1> 0!) more
 (     ) unsafe?dir
 >>> run("play un\033safe\x01file.mkv") # doctest: +ELLIPSIS
@@ -289,6 +326,7 @@ Now, check --help
 >>> runH("--help") # doctest: +ELLIPSIS
 usage: m [-h] [--version] [--dir DIR] [--show-hidden | --no-show-hidden]
          [--colour | --no-colour | --auto-colour]
+         [--ignorecase | --no-ignorecase]
          {list,l,ls,...}
          ...
 <BLANKLINE>
@@ -303,6 +341,8 @@ optional arguments:
   --colour              use coloured output (the default when stdout is a tty)
   --no-colour
   --auto-colour
+  --ignorecase, -i      ignore case when sorting files & dirs
+  --no-ignorecase
 <BLANKLINE>
 subcommands:
   {list,l,ls,...,_test}
@@ -326,8 +366,11 @@ subcommands:
     kodi-import-playing
                         import playing data from kodi
 <BLANKLINE>
-NB: FILE is a file name, state or number(s); e.g. '1', '1-5', '1,4-7',
-'playing', 'new' or 'all'.
+NB: FILE is a file name, state or number(s);
+e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'.
+<BLANKLINE>
+NB: file numbers may change when --ignorecase is used;
+please use the same sort order when listing and using numbers.
 
 >>> runH("ls --help")
 usage: m list [-h] [--numbers | --no-numbers]
@@ -442,7 +485,7 @@ MError: config.json has unexpected value(s)
                                                                 # }}}1
 
 import argparse, contextlib, datetime, inspect, hashlib, json, pty, \
-       os, re, subprocess, sys, urllib
+       os, re, subprocess, sys, textwrap, urllib
 
 from collections import defaultdict
 from pathlib import Path
@@ -477,29 +520,38 @@ INFOCHAR_L    = dict(INFOCHAR, new = "!")
 INFOCOLOUR_L  = dict(zip(STATES, INFOCO))
 INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
 
-FILESPEC      = re.compile("all|" + "|".join(STATES) +
-                           "|(\d+(-\d+)?,)*(\d+(-\d+)?)")
+FILESPEC      = re.compile("all|(\d+(-\d+)?,)*(\d+(-\d+)?)")
 
 STDOUT_TTY    = sys.stdout.isatty()
 USE_SAFE      = STDOUT_TTY                                      # dyn
+
+SHOW_HIDDEN   = False                 # NB: dyn by --[no-]show-hidden
 USE_COLOUR    = STDOUT_TTY            # NB: dyn by --[no-]colour
-SHOW_HIDDEN   = False                 # NB: dyn by --show-hidden
+IGNORECASE    = False                 # NB: dyn by --[no-]ignorecase
 
 STDERR        = sys.stderr
 
 SKIP, DONE, UNMARK = -1, True, False
 
+EPILOG = textwrap.dedent("""
+  NB: FILE is a file name, state or number(s);
+  e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'.
+
+  NB: file numbers may change when --ignorecase is used;
+  please use the same sort order when listing and using numbers.
+""")
+
 class MError(RuntimeError): pass
 
 # === main & related functions ===
 
-# NB: dyn USE_COLOUR, SHOW_HIDDEN
+# NB: dyn SHOW_HIDDEN, USE_COLOUR, IGNORECASE
 # TODO: use threading.local?
 def main(*args):                                                # {{{1
   p = _argument_parser(db_cfg()); n = p.parse_args(args)
-  c = n.colour if n.colour is not None else USE_COLOUR
   if n.subcommand == "_test": return _test(n.verbose)
-  with dyn(globals(), USE_COLOUR = c, SHOW_HIDDEN = n.show_hidden):
+  with dyn(globals(), SHOW_HIDDEN = n.show_hidden,
+           USE_COLOUR = n.colour, IGNORECASE = n.ignorecase):
     dpath = cwd() / Path(n.dir) if n.dir else cwd()
     try:
       return do_something(n.f, dpath, n) or 0
@@ -508,29 +560,32 @@ def main(*args):                                                # {{{1
       return 1
                                                                 # }}}1
 
-DO_ARGS   = "numbers player filename flat zero only_files".split()
-CFG_ARGS  = dict(show_hidden = bool, colour = bool, numbers = bool,
-                 player = None)                   # --> PLAYERS.keys()
+DO_ARGS   = "numbers only_indexed player " \
+            "filename flat zero only_files".split()
+CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
+                 numbers = bool, only_indexed = bool, player = None)
+          # player --> PLAYERS.keys()
 
+# NB: uses SHOW_HIDDEN, USE_COLOUR, IGNORECASE as defaults
 def _argument_parser(d = {}):                                   # {{{1
-  epilog = """NB: FILE is a file name, state or number(s);
-              e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'."""
-  p = argparse.ArgumentParser(description = DESC, epilog = epilog)
+  p = argparse.ArgumentParser(description = DESC, epilog = EPILOG,
+        formatter_class = argparse.RawDescriptionHelpFormatter)
   p.add_argument("--version", action = "version",
                  version = "%(prog)s {}".format(__version__))
   p.add_argument("--dir", "-d", metavar = "DIR",
                  help = "use DIR instead of $PWD")
 
   g1 = p.add_mutually_exclusive_group()
-  g1.set_defaults(show_hidden = d.get("show_hidden"))
+  g1.set_defaults(show_hidden = d.get("show_hidden", SHOW_HIDDEN))
   g1.add_argument("--show-hidden", action = "store_true",
                   help = "show hidden (i.e. starting with .) "
                          "files & dirs")
   g1.add_argument("--no-show-hidden", action = "store_false",
                   dest = "show_hidden")
 
+  c  = d.get("colour"); colour = c if c is not None else USE_COLOUR
   g2 = p.add_mutually_exclusive_group()
-  g2.set_defaults(colour = d.get("colour"))
+  g2.set_defaults(colour = colour)
   g2.add_argument("--colour", action = "store_true",
                   help = "use coloured output "
                          "(the default when stdout is a tty)")
@@ -538,6 +593,13 @@ def _argument_parser(d = {}):                                   # {{{1
                   dest = "colour")
   g2.add_argument("--auto-colour", action = "store_const",
                   dest = "colour", const = None)
+
+  g3 = p.add_mutually_exclusive_group()
+  g3.set_defaults(ignorecase = d.get("ignorecase", IGNORECASE))
+  g3.add_argument("--ignorecase", "-i", action = "store_true",
+                  help = "ignore case when sorting files & dirs")
+  g3.add_argument("--no-ignorecase", action = "store_false",
+                  dest = "ignorecase")
 
   s = p.add_subparsers(title = "subcommands", dest = "subcommand")
   s.required = True           # https://bugs.python.org/issue9253
@@ -590,6 +652,13 @@ def _argument_parser(d = {}):                                   # {{{1
       help = "show numbers (which can be used for mark etc.)")
     g.add_argument("--no-numbers", action = "store_false",
                    dest = "numbers")
+  for x in [p_list_d, p_list_a]:
+    g = x.add_mutually_exclusive_group()
+    g.set_defaults(only_indexed = d.get("only_indexed"))
+    g.add_argument("--only-indexed", "-x", action = "store_true",
+                   help = "only show indexed directories")
+    g.add_argument("--no-only-indexed", action = "store_false",
+                   dest = "only_indexed")
   for x in [p_next, p_next_n, p_play]:
     g = x.add_mutually_exclusive_group()
     g.set_defaults(player = d.get("player", PLAYER))
@@ -651,19 +720,21 @@ def do_list_dir_files(dpath, fs, numbers):                      # {{{1
     print(*o)
                                                                 # }}}1
 
-def do_list_dir_dirs(dpath, _fs):
+def do_list_dir_dirs(dpath, _fs, only_indexed):                 # {{{1
   for sd, p, n in dir_iter_dirs(dpath):
+    if only_indexed and None in [p, n]: continue
     pl = _linfo(p, "playing", 1, p)
     ne = _linfo(n, "new"    , 2, n is not None)
     print("(" + pl + ne + ")", safe(sd))
+                                                                # }}}1
 
 def _linfo(n, st, w, c):
   if not c: return " "*(w+1)
   return clr(INFOCOLOUR_L[st] if n else "yll", str(n).rjust(w)) + \
          INFOCHAR_L[st]
 
-def do_list_dir_all(dpath, fs, numbers):
-  do_list_dir_dirs (dpath, fs)
+def do_list_dir_all(dpath, fs, numbers, only_indexed):
+  do_list_dir_dirs (dpath, fs, only_indexed)
   do_list_dir_files(dpath, fs, numbers)
 
 def do_play_next(dpath, fs, player):
@@ -689,7 +760,7 @@ def do_mark_file(dpath, fs, filename):
 def do_unmark_file(dpath, fs, filename):                        # {{{1
   files   = _files_from_spec(dpath, fs, filename, must_exist = False)
   files_  = [ fn for fn in files if fn in fs ]
-  for fn in sorted(set(files) - set(files_)):
+  for fn in sorted_(set(files) - set(files_)):
     puts("Ignoring unknown file '{}'.".format(fn), file = sys.stderr)
   db_update(dpath, { fn: UNMARK for fn in files_ })
                                                                 # }}}1
@@ -701,7 +772,7 @@ def do_skip_file(dpath, fs, filename):
 def _files_from_spec(dpath, fs, spec, must_exist = True):       # {{{1
   if any( spec.lower().endswith(ext) for ext in EXTS ):
     return [check_filename(dpath, spec, must_exist)]
-  elif re.fullmatch(FILESPEC, spec):
+  elif spec in STATES or re.fullmatch(FILESPEC, spec):
     files = dir_files(dpath)
     if spec == "all": return files
     elif spec in STATES:
@@ -714,7 +785,7 @@ def _files_from_spec(dpath, fs, spec, must_exist = True):       # {{{1
           if not 1 <= x <= len(files):
             raise MError("out of range: '{}'".format(x))
         ret |= set(files[a-1:b])
-      return sorted(ret)
+      return sorted_(ret)
   else:
     raise MError("not a valid file name or number: '{}'".format(spec))
                                                                 # }}}1
@@ -731,6 +802,7 @@ def do_watched_files(_dpath, _fs, flat, zero):
 def do_skipped_files(_dpath, _fs, flat, zero):
   _print_files_with_state("skip", flat, zero)
 
+# TODO: ignore case?
 def _print_files_with_state(st, flat, zero, w_t = False):       # {{{1
   data = _files_with_state(st)
   for dpath_s in sorted(data):
@@ -796,11 +868,11 @@ def dir_next(dpath, fs, skip = "skip done".split()):
   return None
 
 def dir_dirs(dpath):
-  return sorted( x.name for x in _iterdir(dpath) if x.is_dir() )
+  return sorted_( x.name for x in _iterdir(dpath) if x.is_dir() )
 
 def dir_files(dpath):
-  return sorted( x.name for x in _iterdir(dpath)
-                 if x.is_file() and x.suffix.lower() in EXTS )
+  return sorted_( x.name for x in _iterdir(dpath)
+                  if x.is_file() and x.suffix.lower() in EXTS )
 
 def _iterdir(dpath):
   return ( x for x in dpath.iterdir()
@@ -990,8 +1062,7 @@ def check_filename(dpath, fn, must_exist = True):               # {{{1
   return p.name
                                                                 # }}}1
 
-def fmt_time(secs):
-  return str(datetime.timedelta(seconds = secs))
+def fmt_time(secs): return str(datetime.timedelta(seconds = secs))
 
 # NB: use $PWD instead of Path.cwd() since we might be in a symlinked
 # directory in the shell we've been run from.  We could follow the
@@ -1009,6 +1080,9 @@ def puts(*ss, **kw): print(*map(safe, ss), **kw)
 
 def _assert(msg, cond):
   if not cond: raise MError(msg)
+
+def sorted_ (xs): return sorted_i(xs) if IGNORECASE else sorted(xs)
+def sorted_i(xs): return sorted(xs, key = lambda x: (x.lower(), x))
 
 # === kodi ===
 
