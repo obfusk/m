@@ -432,8 +432,10 @@ subcommands:
     skipped             list files marked as skip
     todo (unfinished)   list directories with files marked as playing or new
     db-file             print path to DB file
-    import-watched      import watched data from stdin
-    import-playing      import playing data from stdin
+    import-watched      import watched data from stdin: each line is a file
+                        path
+    import-playing      import playing data from stdin: each line is a file
+                        path (+ separator) + time
     kodi-import-watched
                         import watched data from kodi
     kodi-import-playing
@@ -731,10 +733,12 @@ def _argument_parser(d = {}):                                   # {{{1
                           do_dbfile)
 
   p_imp_w   = _subcommand(s, "import-watched",
-                          "import watched data from stdin",
+                          "import watched data from stdin: "
+                          "each line is a file path",
                           do_import_watched)
   p_imp_p   = _subcommand(s, "import-playing",
-                          "import playing data from stdin",
+                          "import playing data from stdin: each line "
+                          "is a file path (+ separator) + time",
                           do_import_playing)
   p_kodi_w  = _subcommand(s, "kodi-import-watched",
                           "import watched data from kodi",
