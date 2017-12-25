@@ -660,8 +660,8 @@ def main(*args):                                                # {{{1
       return 1
                                                                 # }}}1
 
-DO_ARGS   = "numbers only_indexed todo player " \
-            "filename flat zero only_files only_dirs quiet " \
+DO_ARGS   = "numbers only_indexed todo player filename " \
+            "flat zero only_files only_dirs quiet " \
             "sep replace replace_all include exclude".split()
 CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
                  numbers = bool, only_indexed = bool, player = None)
@@ -728,7 +728,8 @@ def _argument_parser(d = {}):                                   # {{{1
   p_skip    = _subcommand(s, "skip s"     , "mark FILE as skip",
                           do_skip_file)
 
-  p_index   = _subcommand(s, "index i",
+  easteregg = " 禁書目録" if os.environ.get("EASTEREGG") else ""
+  p_index   = _subcommand(s, "index i" + easteregg,
                           "index current directory",
                           do_index_dir)
 
@@ -845,6 +846,7 @@ def _argument_parser(d = {}):                                   # {{{1
       help = "ignore files whose path does not match REGEX")
     g2.add_argument("--exclude", metavar = "REGEX",
       help = "ignore files whose path matches REGEX")
+
   return p
                                                                 # }}}1
 
@@ -1071,16 +1073,8 @@ def do_kodi_watched_sql(_dpath, _fs):
 def do_kodi_playing_sql(_dpath, _fs):
   print(KODI_PLAYING_SQL.strip("\n"))
 
-def do_examples(_dpath, _fs):                                   # {{{1
-  s = __doc__
-  i = s.index("First, set up some test data")
-  j = s.index("Now, run some examples")
-  s = s[:i] + s[j:]
-  k = s.index("Tests\n=====")
-  s = s[:k]
-  for rx, rp in EXRX: s = re.sub(rx, rp, s, flags = re.M)
-  print(s.strip("\n"))
-                                                                # }}}1
+def do_examples(_dpath, _fs):
+  print(EXAMPLES)
 
 # === dir_* ===
 
@@ -1453,7 +1447,7 @@ def stdin_from(f):                                              # {{{1
 
 # === examples s/// ===
 
-EXRX = [                                                        # {{{1
+_EXAMPLES_REPL = [                                              # {{{1
   (r'\s*# doctest:.*'                     , ""                      ),
   (r'(>>> runO.*)'                        , r"\1 # > string"        ),
   (r'>>> runI\(([^,]*), r?"([^"]*)"\)'    , r"$ m \2 # < \1"        ),
@@ -1467,6 +1461,19 @@ EXRX = [                                                        # {{{1
   (r'(--replace) (\S+) (\S+)'             , r"\1 '\2' '\3'"         ),
   (r'RUN true'                            , "RUN"                   ),
 ]                                                               # }}}1
+
+def _examples():                                                # {{{1
+  s = __doc__
+  i = s.index("First, set up some test data")
+  j = s.index("Now, run some examples")
+  s = s[:i] + s[j:]
+  k = s.index("Tests\n=====")
+  s = s[:k]
+  for rx, rp in _EXAMPLES_REPL: s = re.sub(rx, rp, s, flags = re.M)
+  return s.strip("\n")
+                                                                # }}}1
+
+EXAMPLES = _examples()
 
 # === entry point ===
 
