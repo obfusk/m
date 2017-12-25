@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2017-12-24
+    Date        : 2017-12-25
 
     Copyright   : Copyright (C) 2017  Felix C. Stegerman
     Version     : v0.2.1
@@ -64,13 +64,15 @@ Commands include: `list`/`ls`, `list-dirs`/`ld`, `list-all`/`la`,
 `next`, `play FILE`, `mark FILE`, `unmark FILE`, `skip FILE`, `index`,
 `playing`, `watched`, `skipped`, `todo`.
 
-See also the tests in the source code for more examples.
+See also the tests in the source code (also available as `m examples`)
+for more examples.
 
 ## Help
 
 ```bash
 $ m --help      # global options & subcommands
 $ m ls --help   # subcommand (ls in this case) options & argument(s)
+$ m examples    # show some examples from the tests
 ```
 
 ## Requirements

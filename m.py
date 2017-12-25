@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-24
+# Date        : 2017-12-25
 #
 # Copyright   : Copyright (C) 2017  Felix C. Stegerman
 # Version     : v0.2.1
@@ -454,6 +454,7 @@ subcommands:
                         import playing data from kodi
     kodi-watched-sql    print SQL for getting watched data from kodi
     kodi-playing-sql    print SQL for getting playing data from kodi
+    examples            show some examples from the tests
 <BLANKLINE>
 NB: FILE is a file name, state or number(s);
 e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'.
@@ -767,6 +768,10 @@ def _argument_parser(d = {}):                                   # {{{1
                           "print SQL for getting playing data from kodi",
                           do_kodi_playing_sql)
 
+  p_ex      = _subcommand(s, "examples",
+                          "show some examples from the tests",
+                          do_examples)
+
   p_test    = s.add_parser("_test")
   p_test.add_argument("--verbose", "-v", action = "store_true")
 
@@ -1065,6 +1070,17 @@ def do_kodi_watched_sql(_dpath, _fs):
 
 def do_kodi_playing_sql(_dpath, _fs):
   print(KODI_PLAYING_SQL.strip("\n"))
+
+def do_examples(_dpath, _fs):                                   # {{{1
+  s = __doc__
+  i = s.index("First, set up some test data")
+  j = s.index("Now, run some examples")
+  s = s[:i] + s[j:]
+  k = s.index("Tests\n=====")
+  s = s[:k]
+  for rx, rp in EXRX: s = re.sub(rx, rp, s, flags = re.M)
+  print(s.strip("\n"))
+                                                                # }}}1
 
 # === dir_* ===
 
@@ -1434,6 +1450,23 @@ def stdin_from(f):                                              # {{{1
   finally:
     sys.stdin = old_stdin
                                                                 # }}}1
+
+# === examples s/// ===
+
+EXRX = [                                                        # {{{1
+  (r'\s*# doctest:.*'                     , ""                      ),
+  (r'(>>> runO.*)'                        , r"\1 # > string"        ),
+  (r'>>> runI\(([^,]*), r?"([^"]*)"\)'    , r"$ m \2 # < \1"        ),
+  (r'>>> run\w*\("([^"]*)"(?:, (.*))?\)'  , r"$ m \1 # \2"          ),
+  (r'\$ m (.*) # d = d / "([^"]*)"'       , r"$ m -d \2 \1"         ),
+  (r'\$ m (.*) # c = True'                , r"$ m --colour \1"      ),
+  (r'\$ m (.*) # c = None'                , r"$ m --colour-auto \1" ),
+  (r'\s*#\s*$'                            , ""                      ),
+  (r'\s*#  #'                             , " #"                    ),
+  (r'<BLANKLINE>'                         , ""                      ),
+  (r'(--replace) (\S+) (\S+)'             , r"\1 '\2' '\3'"         ),
+  (r'RUN true'                            , "RUN"                   ),
+]                                                               # }}}1
 
 # === entry point ===
 
