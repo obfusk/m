@@ -361,14 +361,14 @@ Now, check importing
 >>> playing # doctest: +ELLIPSIS
 '/some/file/to_skip/x.mkv 404\x00...bar.mkv 101\x00'
 
->>> runI(watched, r"import-watched --replace (?<=\A/some/)old(?=/dir/) new")
+>>> runI(watched, r"import-watched --replace (?<=\A/some/)old(?=/dir/) new --replace foo bar")
 Imported 5 file(s) in 3 dir(s).
 >>> run("watched") # doctest: +ELLIPSIS
 /some/new/dir/some/file:
   a.mp4
   b.mp4
 /some/other/watched/file:
-  foo.mkv
+  bar.mkv
 /some/watched/file:
   1.mkv
   2.mkv
@@ -636,9 +636,11 @@ EPILOG = textwrap.dedent("""
 """)
 
 RX_EPILOG = """
-  See
-  https://docs.python.org/3/library/re.html#regular-expression-syntax
+  See https://docs.python.org/3/library/re.html#regular-expression-syntax
   for the Python regular expression syntax.
+
+  NB: choose your substitutions carefully so they don't inadvertently
+  affect each other; each --replace runs before each --replace-all.
 """
 
 class MError(RuntimeError): pass
@@ -830,16 +832,17 @@ def _argument_parser(d = {}):                                   # {{{1
                    help = "import from FILE (instead of ~/{})"
                           .format(KODIDB))
   for x in [p_imp_w, p_imp_p, p_kodi_w, p_kodi_p]:
-    repl_help = """
+    repl_help, repl_meta = """
       rename files: substitute the first occurence of REGEX in each
       file path with REPLACEMENT; NB: renaming is done after filtering
       (i.e. --include or --exclude)
-    """
+    """, ("REGEX", "REPLACEMENT")
     g1 = x.add_mutually_exclusive_group()
-    g1.add_argument("--replace", nargs = 2, help = repl_help,
-                    metavar = ("REGEX", "REPLACEMENT"))
-    g1.add_argument("--replace-all", nargs = 2,
-                    metavar = ("REGEX", "REPLACEMENT"),
+    g1.set_defaults(replace = [], replace_all = [])
+    g1.add_argument("--replace", nargs = 2, action = "append",
+                    metavar = repl_meta, help = repl_help)
+    g1.add_argument("--replace-all", nargs = 2, action = "append",
+                    metavar = repl_meta,
       help = "rename file like --replace, but replace all occurences")
     g2 = x.add_mutually_exclusive_group()
     g2.add_argument("--include", metavar = "REGEX",
@@ -852,7 +855,9 @@ def _argument_parser(d = {}):                                   # {{{1
 
 def _subcommand(s, names, desc, f, **kw):                       # {{{1
   name, *aliases = names.split()
-  if "import" in name: kw["epilog"] = RX_EPILOG
+  if "import" in name:
+    kw.update(epilog = RX_EPILOG,
+              formatter_class = argparse.RawDescriptionHelpFormatter)
   p = s.add_parser(name, aliases = aliases, help = desc,
                    description = desc, **kw)
   p.set_defaults(f = f)
@@ -1039,20 +1044,21 @@ def _time_line(line, sep):
   return Path(p), s2secs(t) if ":" in t else int(t)
 
 def _import(repl, repl_all, incl, excl, it, state = DONE):      # {{{1
-  assert not repl     or len(repl    ) == 2
-  assert not repl_all or len(repl_all) == 2
+  assert all( len(x) == 2 for x in repl     )
+  assert all( len(x) == 2 for x in repl_all )
   data = defaultdict(dict)
   for x in it:
     if isinstance(x, Path):
-      fp, st = x, state
+      fp_, st = x, state
     else:
-      fp, t = x; st = int(t)
-    assert isinstance(fp, Path)
-    if incl and not re.search(incl, str(fp)): continue
-    if excl and     re.search(excl, str(fp)): continue
-    if repl:        fp = Path(re.sub(*repl, str(fp), 1))        # !!!
-    elif repl_all:  fp = Path(re.sub(*repl, str(fp)))
-    data[fp.parent][fp.name] = st
+      fp_, t = x; st = int(t)
+    assert isinstance(fp_, Path)
+    fp_s = str(fp_)
+    if incl and not re.search(incl, fp_s): continue
+    if excl and     re.search(excl, fp_s): continue
+    for rx, rp in repl:     fp_s = re.sub(rx, rp, fp_s, 1)      # !!!
+    for rx, rp in repl_all: fp_s = re.sub(rx, rp, fp_s)
+    fp = Path(fp_s); data[fp.parent][fp.name] = st
   for dpath, fs in data.items(): db_update(dpath, fs)
   print(IMPORTED.format(sum(map(len, data.values())), len(data)))
                                                                 # }}}1
