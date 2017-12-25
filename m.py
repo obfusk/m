@@ -635,13 +635,15 @@ EPILOG = textwrap.dedent("""
   please use the same sort order when listing and using numbers.
 """)
 
-RX_EPILOG = """
+RX_EPILOG = textwrap.dedent("""
   See https://docs.python.org/3/library/re.html#regular-expression-syntax
   for the Python regular expression syntax.
 
-  NB: choose your substitutions carefully so they don't inadvertently
-  affect each other; each --replace runs before each --replace-all.
-"""
+  NB: --replace and --replace-all can be used multiple times to do
+  multiple substitutions; choose your substitutions carefully so they
+  don't inadvertently affect each other; each --replace runs before
+  each --replace-all.
+""")
 
 class MError(RuntimeError): pass
 
