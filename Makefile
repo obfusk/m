@@ -3,9 +3,6 @@ PY        ?= python3
 ME        := m.py
 PKG       := mmm
 
-DEBEMAIL  ?= flx@obfusk.net
-export DEBEMAIL
-
 .PHONY: test test_verbose coverage clean cleanup install package \
         publish _dch
 
@@ -46,5 +43,6 @@ publish: clean package
 	[[ "$$REPLY" == [Yy]* ]] && twine upload dist/*
 
 _dch:
-	dch -v $(NEWVERSION) --release-heuristic log
+	export DEBEMAIL="$$( git config --get user.email )"; \
+	dch -v $(NEWVERSION) --release-heuristic log && \
 	gbp dch --since v$(OLDVERSION)
