@@ -3,8 +3,10 @@ PY        ?= python3
 ME        := m.py
 PKG       := mmm
 
-.PHONY: test test_verbose coverage clean cleanup install package \
-        publish _dch
+TOUCH     := README.md debian/copyright
+
+.PHONY: test test_verbose coverage clean cleanup install fix_mtimes \
+        package _publish _dch
 
 test:
 	$(PY) $(ME) _test
@@ -25,10 +27,14 @@ clean:
 cleanup: clean
 	rm -fr debian/.debhelper debian/files debian/mmm*
 
-install:
+install: fix_mtimes
 	test -d "$(DESTDIR)"
 	mkdir -p "$(DESTDIR)"/usr/bin
 	cp -i m.py "$(DESTDIR)"/usr/bin/m
+
+fix_mtimes:
+	[ -z "$$SOURCE_DATE_EPOCH" ] || \
+	  touch -d @"$$SOURCE_DATE_EPOCH" $(TOUCH)
 
 %.rst: %.md
 	grep -Ev '^\s*<!--.*-->\s*$$' $< \
@@ -38,7 +44,7 @@ install:
 package: README.rst
 	$(PY) setup.py sdist bdist_wheel
 
-publish: clean package
+_publish: clean package
 	read -r -p "Are you sure? "; \
 	[[ "$$REPLY" == [Yy]* ]] && twine upload dist/*
 
