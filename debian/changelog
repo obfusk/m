@@ -1,3 +1,41 @@
+mmm (0.3.0) UNRELEASED; urgency=medium
+
+  * fix typo in Makefile
+  * test hidden files (breaks)
+  * hide dotfiles (fixed)
+  * add --show-hidden; add & use dyn()
+  * README: mention --help; subcommands: refactor + add description
+  * update TODO; unmark nonexistent is OK; use MError, redirect_*
+  * added --numbers, mark 1-12 (etc), db-file; test --help
+  * + mpv support; + test run errors; small improvements
+  * fix test for python3.5 and pypy3 (small output difference)
+  * + config.json, --no-*, --vlc
+  * add info about FILE number(s) to help; update TODO
+  * + debian/; update Makefile
+  * README: requirements, git, .deb
+  * _assert() config.json; some more examples headers
+  * distinguish examples from tests in docstring
+  * only use safe() when stdout is a tty; easier w/ puts()
+  * debian package: move cleanup to make cleanup, R^3
+  * mpv: fix counting as watched (i.e. if ends during last few seconds)
+  * commands: + next-new, continue = next; refactor, DONE, UNMARK
+  * allow file spec to be a state: e.g. mark playing works now
+  * + --ignorecase, --only-indexed; some refactoring
+  * + todo, ld --todo; always honour -i; only load db if used
+  * + import-{playing,watched}, *-sql, --replace etc.; refactor a bit
+  * clarify import format
+  * README: TODO++
+  * todo: ignore missing dirs, print unless --quiet
+  * + m examples
+  * split EXAMPLES from do_examples(); + :)
+  * allow multiple --replace{,-all}
+  * TODO++
+  * note that --replace{,-all} can be used multiple times
+  * Makefile: + _dch
+  * Makefile: get DEBEMAIL from git
+
+ -- Felix C. Stegerman <flx@obfusk.net>  Tue, 26 Dec 2017 12:12:42 +0100
+
 mmm (0.2.1) UNRELEASED; urgency=low
 
   * Initial release.
