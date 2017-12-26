@@ -151,6 +151,7 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
 * more file extensions!
 * document `safe()` vs `--zero`
 * `_pty_run`: also minimize output if not a tty?
+* fix `m _test` when run via wrapper (`m.MError` vs `MError`)?
 
 ### Maybe
 
