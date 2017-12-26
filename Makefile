@@ -27,6 +27,9 @@ clean:
 cleanup: clean
 	rm -fr debian/.debhelper debian/files debian/mmm*
 
+# NB: maybe not the best place to call fix_mtimes, but dh_auto_install
+# runs before dh_installdocs and we only use the install target for
+# dpkg-buildpackage anyway.
 install: fix_mtimes
 	test -d "$(DESTDIR)"
 	mkdir -p "$(DESTDIR)"/usr/bin
