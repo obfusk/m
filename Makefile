@@ -1,9 +1,13 @@
-SHELL   := bash
-PY      ?= python3
-ME      := m.py
-PKG     := mmm
+SHELL     := bash
+PY        ?= python3
+ME        := m.py
+PKG       := mmm
 
-.PHONY: test test_verbose coverage clean cleanup install package publish
+DEBEMAIL  ?= flx@obfusk.net
+export DEBEMAIL
+
+.PHONY: test test_verbose coverage clean cleanup install package \
+        publish _dch
 
 test:
 	$(PY) $(ME) _test
@@ -40,3 +44,7 @@ package: README.rst
 publish: clean package
 	read -r -p "Are you sure? "; \
 	[[ "$$REPLY" == [Yy]* ]] && twine upload dist/*
+
+_dch:
+	dch -v $(NEWVERSION) --release-heuristic log
+	gbp dch --since v$(OLDVERSION)
