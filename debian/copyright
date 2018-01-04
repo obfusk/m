@@ -3,11 +3,11 @@ Upstream-Name: m
 Source: <https://github.com/obfusk/m>
 
 Files: *
-Copyright: 2017 Felix C. Stegerman <flx@obfusk.net>
+Copyright: 2018 Felix C. Stegerman <flx@obfusk.net>
 License: GPL-3.0+
 
 Files: debian/*
-Copyright: 2017 Felix C. Stegerman <flx@obfusk.net>
+Copyright: 2018 Felix C. Stegerman <flx@obfusk.net>
 License: GPL-3.0+
 
 License: GPL-3.0+

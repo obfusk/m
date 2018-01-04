@@ -5,9 +5,9 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2017-12-26
+# Date        : 2018-01-04
 #
-# Copyright   : Copyright (C) 2017  Felix C. Stegerman
+# Copyright   : Copyright (C) 2018  Felix C. Stegerman
 # Version     : v0.3.0
 # License     : GPLv3+
 #
