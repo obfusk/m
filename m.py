@@ -571,6 +571,19 @@ MError: config.json has unexpected value(s)
 Traceback (most recent call last):
   ...
 MError: config.json has unexpected value(s)
+
+
+Check some Python weirdness
+---------------------------
+
+>>> _state_in_db(SKIP)
+'skip'
+>>> _state_in_db(DONE)
+'done'
+>>> _state_in_db(42)
+'playing'
+>>> _state_in_db(1)
+'playing'
 """
                                                                 # }}}1
 
@@ -1093,6 +1106,7 @@ def dir_iter(dpath, fs = None):
 def _state(fn, fs):
   return _state_in_db(fs[fn]) if fn in fs else "new"
 
+# TODO
 def _state_in_db(what):
   return { SKIP: "skip", DONE: "done" }.get(what, "playing")
 
