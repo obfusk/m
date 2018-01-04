@@ -584,6 +584,17 @@ Check some Python weirdness
 'playing'
 >>> _state_in_db(1)
 'playing'
+
+>>> db_t({}, "foo") is None
+True
+>>> db_t(dict(foo = SKIP), "foo") is None
+True
+>>> db_t(dict(foo = DONE), "foo") is None
+True
+>>> db_t(dict(foo = 42), "foo")
+42
+>>> db_t(dict(foo = 1), "foo")
+1
 """
                                                                 # }}}1
 
@@ -1195,6 +1206,7 @@ def db_dir_file(dpath):
         hashlib.sha1(d.encode()).hexdigest() + ".json"
   return HOME / CFG / fn
 
+# TODO
 def db_t(fs, fn):
   t = fs.get(fn)
   return None if t in [DONE, SKIP] else t
@@ -1227,7 +1239,7 @@ def vlc_play(fp, t = None):
   cmd = VLCCMD + (VLCCONT(t) if t else []) + ["--", fp]
   puts("RUN", *cmd); subprocess.run(cmd, check = True)
   t_  = vlc_get_times().get(fp) or DONE
-  return UNMARK if t_ == DONE and not prompt_yn("Done") else t_
+  return UNMARK if t_ is DONE and not prompt_yn("Done") else t_
 
 
 # TODO: cleanup?
