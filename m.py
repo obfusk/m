@@ -649,7 +649,7 @@ IGNORECASE    = False                 # NB: dyn by --[no-]ignorecase
 
 STDERR        = sys.stderr
 
-SKIP, DONE, UNMARK = -1, True, False
+SKIP, DONE, UNMARK = -1, True, False  # NB: True == 1
 
 EPILOG = textwrap.dedent("""
   NB: FILE is a file name, state or number(s);
@@ -1117,6 +1117,7 @@ def dir_iter(dpath, fs = None):
 def _state(fn, fs):
   return _state_in_db(fs[fn]) if fn in fs else "new"
 
+# NB: True == 1
 def _state_in_db(what):
   return "playing" if type(what) is int and what > 0 \
     else { SKIP: "skip", DONE: "done" }[what]
@@ -1189,6 +1190,7 @@ def db_update(dpath, files):                                    # {{{1
     f.write("\n")
                                                                 # }}}1
 
+# NB: True == 1
 def _db_check(df, dpath, db):                                   # {{{1
   _assert(str(df) + " has wrong key(s)",
           sorted(db.keys()) == "dir files".split())
@@ -1206,10 +1208,10 @@ def db_dir_file(dpath):
         hashlib.sha1(d.encode()).hexdigest() + ".json"
   return HOME / CFG / fn
 
-# TODO
+# NB: True == 1
 def db_t(fs, fn):
   t = fs.get(fn)
-  return None if t in [DONE, SKIP] else t
+  return t if type(t) is int and t > 0 else None
 
 def db_dirs():
   for df in (HOME / CFG).glob("dir__*.json"):
@@ -1235,6 +1237,7 @@ def play_file(dpath, fs, fn, player = None):                    # {{{1
 # NB: we unfortunately can't tell the difference between a file that
 # has played completely and one that has played very little, so we
 # need to prompt :(
+# NB: True == 1
 def vlc_play(fp, t = None):
   cmd = VLCCMD + (VLCCONT(t) if t else []) + ["--", fp]
   puts("RUN", *cmd); subprocess.run(cmd, check = True)
