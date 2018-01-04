@@ -1106,9 +1106,9 @@ def dir_iter(dpath, fs = None):
 def _state(fn, fs):
   return _state_in_db(fs[fn]) if fn in fs else "new"
 
-# TODO
 def _state_in_db(what):
-  return { SKIP: "skip", DONE: "done" }.get(what, "playing")
+  return "playing" if type(what) is int and what > 0 \
+    else { SKIP: "skip", DONE: "done" }[what]
 
 def dir_iter_dirs(dpath):                                       # {{{1
   for sd in dir_dirs(dpath):
@@ -1183,7 +1183,7 @@ def _db_check(df, dpath, db):                                   # {{{1
           sorted(db.keys()) == "dir files".split())
   _assert(str(df) + " has wrong dir", db["dir"] == str(dpath))
   _assert(str(df) + " has wrong files value(s)",
-          all( x == DONE or type(x) == int and (x > 0 or x == SKIP)
+          all( x > 0 or x == SKIP if type(x) is int else x is DONE
                for x in db["files"].values() ))
   return db
                                                                 # }}}1
