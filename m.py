@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2018-01-04
+# Date        : 2018-01-20
 #
 # Copyright   : Copyright (C) 2018  Felix C. Stegerman
 # Version     : v0.3.0
@@ -686,6 +686,8 @@ def main(*args):                                                # {{{1
     except MError as e:
       puts("Error:", str(e), file = sys.stderr)
       return 1
+    except BrokenPipeError:                                     # TODO
+      return 0
                                                                 # }}}1
 
 DO_ARGS   = "numbers only_indexed todo player filename " \
