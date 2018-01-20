@@ -598,8 +598,8 @@ True
 """
                                                                 # }}}1
 
-import argparse, contextlib, datetime, inspect, hashlib, io, json, \
-       pty, os, re, subprocess, sys, textwrap, urllib
+import argparse, contextlib, datetime, functools, inspect, hashlib, \
+       io, json, pty, os, re, subprocess, sys, textwrap, urllib
 
 from collections import defaultdict
 from pathlib import Path
@@ -671,6 +671,16 @@ RX_EPILOG = textwrap.dedent("""
 
 class MError(RuntimeError): pass
 
+def handle_broken_pipe(f):                                      # {{{1
+  @functools.wraps(f)
+  def g(*a, **k):
+    try:
+      return f(*a, **k)
+    except BrokenPipeError:
+      sys.exit(0)
+  return g
+                                                                # }}}1
+
 # === main & related functions ===
 
 # NB: dyn SHOW_HIDDEN, USE_COLOUR, IGNORECASE
@@ -686,8 +696,6 @@ def main(*args):                                                # {{{1
     except MError as e:
       puts("Error:", str(e), file = sys.stderr)
       return 1
-    except BrokenPipeError:                                     # TODO
-      return 0
                                                                 # }}}1
 
 DO_ARGS   = "numbers only_indexed todo player filename " \
@@ -918,6 +926,7 @@ def do_something(f, dpath, ns):                                 # {{{1
 
 # === do_* ===
 
+@handle_broken_pipe
 def do_list_dir_files(dpath, fs, numbers):                      # {{{1
   for i, (st, fn) in enumerate(dir_iter(dpath, fs)):
     infochar = clr(INFOCOLOUR[st], INFOCHAR[st])
@@ -930,6 +939,7 @@ def do_list_dir_files(dpath, fs, numbers):                      # {{{1
 def do_list_dir_dirs(dpath, _fs, only_indexed, todo = False):
   _list_dir_dirs(dir_iter_dirs(dpath), only_indexed, todo)
 
+@handle_broken_pipe
 def _list_dir_dirs(it, only_indexed = False, todo = False):     # {{{1
   for sd, p, n in it:
     if (only_indexed or todo) and None in [p, n]: continue
@@ -1014,6 +1024,7 @@ def do_watched_files(_dpath, _fs, flat, zero):
 def do_skipped_files(_dpath, _fs, flat, zero):
   _print_files_with_state("skip", flat, zero)
 
+@handle_broken_pipe
 def _print_files_with_state(st, flat, zero, w_t = False):       # {{{1
   data = _files_with_state(st)
   for dpath_s in sorted_(data):
@@ -1033,6 +1044,7 @@ def _files_with_state(st):                                      # {{{1
   return data
                                                                 # }}}1
 
+@handle_broken_pipe
 def do_todo_dirs(_dpath, _fs, only_dirs, quiet):                # {{{1
   data, nodir = {}, []
   for dpath_s, fs in db_dirs():
@@ -1107,6 +1119,7 @@ def do_kodi_watched_sql(_dpath, _fs):
 def do_kodi_playing_sql(_dpath, _fs):
   print(KODI_PLAYING_SQL.strip("\n"))
 
+@handle_broken_pipe
 def do_examples(_dpath, _fs):
   print(EXAMPLES)
 
