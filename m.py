@@ -634,8 +634,9 @@ True
 """
                                                                 # }}}1
 
-import argparse, contextlib, datetime, functools, inspect, hashlib, \
-       io, json, pty, os, re, subprocess, sys, textwrap, urllib
+import argparse, contextlib, datetime, errno, functools, inspect, \
+       hashlib, io, json, pty, os, re, subprocess, sys, textwrap, \
+       urllib
 
 from collections import defaultdict
 from pathlib import Path
@@ -1363,7 +1364,7 @@ def _pty_run(cmd, testing = False, bufsize = 1024):             # {{{1
   retcode, signal = retcodesig >> 8, retcodesig & 0xff
   if retcode == 127 and b"*** CHILD exec() FAILED ***" in buf \
                     and b"FileNotFoundError" in buf:
-    e = FileNotFoundError(os.errno.ENOENT,
+    e = FileNotFoundError(errno.ENOENT,
           "No such file or directory: '{}'".format(cmd[0]))
     e.filename = cmd[0]
     raise e
