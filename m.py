@@ -675,7 +675,7 @@ INFOCHAR_L    = dict(INFOCHAR, new = "!")
 INFOCOLOUR_L  = dict(zip(STATES, INFOCO))
 INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
 
-FILESPEC      = re.compile("all|(\d+(-\d+)?,)*(\d+(-\d+)?)")
+FILESPEC      = re.compile(r"all|(\d+(-\d+)?,)*(\d+(-\d+)?)")
 
 STDOUT_TTY    = sys.stdout.isatty()
 USE_SAFE      = STDOUT_TTY                                      # dyn
@@ -1432,8 +1432,10 @@ def sorted_(xs, key = idf, **kw):
   if NUMERICSORT: k = compose(_num_key, k)
   return sorted(xs, key = compose(lambda x: (k(x), x), key), **kw)
 
-def _num_key(s): return [ int(x) if x.isnumeric() else x
-                          for x in re.split("(\d+)", s) ]
+def _num_key(s): return [ float(x) if re.fullmatch(NUMRX, x) else x
+                          for x in re.split(NUMRX, s) ]
+
+NUMRX = re.compile(r"(\d+(?:\.\d+)?)")
 
 def s2dt(s): return datetime.datetime.strptime(s, "%H:%M:%S")
 def s2secs(s): return (s2dt(s) - s2dt("00:00:00")).seconds
