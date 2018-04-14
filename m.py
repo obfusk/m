@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2018-01-20
+# Date        : 2018-04-14
 #
 # Copyright   : Copyright (C) 2018  Felix C. Stegerman
 # Version     : v0.3.0
@@ -304,6 +304,40 @@ Now, test sorting
   3 [x] Y_.mkv
   4 [x] z.mkv
 
+>>> numeric_tests = [ d / "NUM 42 TEST {}.mkv".format(x)
+...                   for x in "1 2 03 10".split() ]
+>>> for _f in numeric_tests: _f.touch()
+
+>>> run("ls")
+[ ] NUM 42 TEST 03.mkv
+[ ] NUM 42 TEST 1.mkv
+[ ] NUM 42 TEST 10.mkv
+[ ] NUM 42 TEST 2.mkv
+[x] Y_.mkv
+[x] x.mkv
+[ ] y.mkv
+[x] z.mkv
+>>> run("-N ls")
+[ ] NUM 42 TEST 1.mkv
+[ ] NUM 42 TEST 2.mkv
+[ ] NUM 42 TEST 03.mkv
+[ ] NUM 42 TEST 10.mkv
+[x] Y_.mkv
+[x] x.mkv
+[ ] y.mkv
+[x] z.mkv
+>>> run("-N -i ls")
+[ ] NUM 42 TEST 1.mkv
+[ ] NUM 42 TEST 2.mkv
+[ ] NUM 42 TEST 03.mkv
+[ ] NUM 42 TEST 10.mkv
+[x] x.mkv
+[ ] y.mkv
+[x] Y_.mkv
+[x] z.mkv
+
+>>> for _f in numeric_tests: _f.unlink()
+
 
 Now, test w/ "unsafe" file & dir
 --------------------------------
@@ -408,7 +442,7 @@ Now, check --help
 >>> runH("--help") # doctest: +ELLIPSIS
 usage: m [-h] [--version] [--dir DIR] [--show-hidden | --no-show-hidden]
          [--colour | --no-colour | --auto-colour]
-         [--ignorecase | --no-ignorecase]
+         [--ignorecase | --no-ignorecase] [--numeric-sort | --no-numeric-sort]
          {list,l,ls,...}
          ...
 <BLANKLINE>
@@ -425,6 +459,8 @@ optional arguments:
   --auto-colour
   --ignorecase, -i      ignore case when sorting files & dirs
   --no-ignorecase
+  --numeric-sort, -N    sort files & dirs numerically
+  --no-numeric-sort
 <BLANKLINE>
 subcommands:
   {list,l,ls,...,_test}
@@ -459,7 +495,7 @@ subcommands:
 NB: FILE is a file name, state or number(s);
 e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'.
 <BLANKLINE>
-NB: file numbers may change when --ignorecase is used;
+NB: file numbers may change when --ignorecase or --numeric-sort is used;
 please use the same sort order when listing and using numbers.
 
 >>> runH("ls --help")
@@ -646,6 +682,7 @@ USE_SAFE      = STDOUT_TTY                                      # dyn
 SHOW_HIDDEN   = False                 # NB: dyn by --[no-]show-hidden
 USE_COLOUR    = STDOUT_TTY            # NB: dyn by --[no-]colour
 IGNORECASE    = False                 # NB: dyn by --[no-]ignorecase
+NUMERICSORT   = False                 # NB: dyn by --[no-]numeric-sort
 
 STDERR        = sys.stderr
 
@@ -655,7 +692,7 @@ EPILOG = textwrap.dedent("""
   NB: FILE is a file name, state or number(s);
   e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'.
 
-  NB: file numbers may change when --ignorecase is used;
+  NB: file numbers may change when --ignorecase or --numeric-sort is used;
   please use the same sort order when listing and using numbers.
 """)
 
@@ -683,13 +720,14 @@ def handle_broken_pipe(f):                                      # {{{1
 
 # === main & related functions ===
 
-# NB: dyn SHOW_HIDDEN, USE_COLOUR, IGNORECASE
+# NB: dyn SHOW_HIDDEN, USE_COLOUR, IGNORECASE, NUMERICSORT
 # TODO: use threading.local?
 def main(*args):                                                # {{{1
   p = _argument_parser(db_cfg()); n = p.parse_args(args)
   if n.subcommand == "_test": return _test(n.verbose)
   with dyn(globals(), SHOW_HIDDEN = n.show_hidden,
-           USE_COLOUR = n.colour, IGNORECASE = n.ignorecase):
+           USE_COLOUR = n.colour, IGNORECASE = n.ignorecase,
+           NUMERICSORT = n.numeric_sort):
     dpath = cwd() / Path(n.dir) if n.dir else cwd()
     try:
       return do_something(n.f, dpath, n) or 0
@@ -702,10 +740,11 @@ DO_ARGS   = "numbers only_indexed todo player filename " \
             "flat zero only_files only_dirs quiet " \
             "sep replace replace_all include exclude".split()
 CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
-                 numbers = bool, only_indexed = bool, player = None)
+                 numeric_sort = bool, numbers = bool,
+                 only_indexed = bool, player = None)
           # player --> PLAYERS.keys()
 
-# NB: uses SHOW_HIDDEN, USE_COLOUR, IGNORECASE as defaults
+# NB: uses SHOW_HIDDEN, USE_COLOUR, IGNORECASE, NUMERICSORT as defaults
 def _argument_parser(d = {}):                                   # {{{1
   p = argparse.ArgumentParser(description = DESC, epilog = EPILOG,
         formatter_class = argparse.RawDescriptionHelpFormatter)
@@ -739,6 +778,13 @@ def _argument_parser(d = {}):                                   # {{{1
                   help = "ignore case when sorting files & dirs")
   g3.add_argument("--no-ignorecase", action = "store_false",
                   dest = "ignorecase")
+
+  g4 = p.add_mutually_exclusive_group()
+  g4.set_defaults(numeric_sort = d.get("numeric_sort", NUMERICSORT))
+  g4.add_argument("--numeric-sort", "-N", action = "store_true",
+                  help = "sort files & dirs numerically")
+  g4.add_argument("--no-numeric-sort", action = "store_false",
+                  dest = "numeric_sort")
 
   s = p.add_subparsers(title = "subcommands", dest = "subcommand")
   s.required = True           # https://bugs.python.org/issue9253
@@ -1376,12 +1422,17 @@ def puts(*ss, **kw): print(*map(safe, ss), **kw)
 def _assert(msg, cond):
   if not cond: raise MError(msg)
 
-def sorted_(xs, **kw):
-  return (sorted_i if IGNORECASE else sorted)(xs, **kw)
+def compose(f, g): return lambda x: f(g(x))
+def idf(x): return x
 
-def sorted_i(xs, key = None):
-  k = lambda x: (x.lower(), x)
-  return sorted(xs, key = (lambda x: k(key(x))) if key else k)
+def sorted_(xs, key = idf, **kw):
+  k = idf
+  if IGNORECASE:  k = compose(lambda s: s.lower(), k)
+  if NUMERICSORT: k = compose(_num_key, k)
+  return sorted(xs, key = compose(lambda x: (k(x), x), key), **kw)
+
+def _num_key(s): return [ int(x) if x.isnumeric() else x
+                          for x in re.split("(\d+)", s) ]
 
 def s2dt(s): return datetime.datetime.strptime(s, "%H:%M:%S")
 def s2secs(s): return (s2dt(s) - s2dt("00:00:00")).seconds

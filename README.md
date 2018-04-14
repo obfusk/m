@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-01-04
+    Date        : 2018-04-14
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.3.0
@@ -135,6 +135,7 @@ You can set some defaults in `~/.obfusk-m/config.json`; for example:
   "colour": true,
   "ignorecase": true,
   "numbers": true,
+  "numeric_sort": true,
   "only_indexed": true,
   "player": "mpv",
   "show_hidden": true
