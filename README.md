@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-04-14
+    Date        : 2018-07-05
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.3.0
@@ -128,11 +128,14 @@ $ sudo dpkg -i ../mmm_*_all.deb
 
 ## Configuration File
 
-You can set some defaults in `~/.obfusk-m/config.json`; for example:
+You can set/override some defaults in `~/.obfusk-m/config.json`; for
+example:
 
 ```json
 {
+  "add_exts": [".mp3", ".ogg"],
   "colour": true,
+  "exts": [".avi", ".m4v", ".mkv", ".mp4", ".ogv", ".webm"],
   "ignorecase": true,
   "numbers": true,
   "numeric_sort": true,

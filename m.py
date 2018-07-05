@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2018-04-14
+# Date        : 2018-07-05
 #
 # Copyright   : Copyright (C) 2018  Felix C. Stegerman
 # Version     : v0.3.0
@@ -256,14 +256,17 @@ Now, test w/ config.json
 ------------------------
 
 >>> cfg = dict(colour = True, ignorecase = True, numbers = True,
-...            only_indexed = True, player = "mpv", show_hidden = True)
+...            only_indexed = True, player = "mpv", show_hidden = True,
+...            exts = [".mkv"], add_exts = [".mp3"])
 >>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps(cfg))
+>>> for _f in [d / "hidden.mp4", d / "shown.mp3"]: _f.touch()
 
 >>> run("ls", c = None)
   1 [ ] .dotfile.mkv
-  2 [CYA*NON] x.mkv
-  3 [GRNxNON] y.mkv
-  4 [GRNxNON] z.mkv
+  2 [ ] shown.mp3
+  3 [CYA*NON] x.mkv
+  4 [GRNxNON] y.mkv
+  5 [GRNxNON] z.mkv
 >>> run("play y.mkv") # doctest: +ELLIPSIS
 Playing y.mkv ...
 RUN true mpv --fullscreen -- .../media/y.mkv
@@ -271,6 +274,7 @@ RUN true mpv --fullscreen -- .../media/y.mkv
 Playing y.mkv from 0:01:01 ...
 RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 >>> run("--no-show-hidden --no-colour ls --no-numbers", c = None)
+[ ] shown.mp3
 [*] x.mkv
 [x] y.mkv
 [x] z.mkv
@@ -278,6 +282,7 @@ RUN true vlc --fullscreen --play-and-exit --start-time 56 -- .../media/y.mkv
 (1> 0!) more
 (   0!) More_
 
+>>> for _f in [d / "hidden.mp4", d / "shown.mp3"]: _f.unlink()
 >>> _   = (FAKE_HOME / CFG / CFGFILE).write_text(json.dumps({}))
 
 
@@ -651,7 +656,7 @@ CFGFILE       = "config.json"
 VLCQT         = ".config/vlc/vlc-qt-interface.conf"
 KODIDB        = ".kodi/userdata/Database/MyVideos107.db"
 
-EXTS          = ".avi .m4v .mkv .mp3 .mp4 .ogg .ogv".split()    # TODO
+EXTS          = ".avi .m4v .mkv .mp4 .ogv .webm".split()        # TODO
 CONT_BACK     = 5                                               # TODO
 END_SECS      = 5                                               # TODO
 PLAYER        = "vlc"
@@ -721,14 +726,15 @@ def handle_broken_pipe(f):                                      # {{{1
 
 # === main & related functions ===
 
-# NB: dyn SHOW_HIDDEN, USE_COLOUR, IGNORECASE, NUMERICSORT
+# NB: dyn SHOW_HIDDEN, USE_COLOUR, IGNORECASE, NUMERICSORT, EXTS
 # TODO: use threading.local?
 def main(*args):                                                # {{{1
-  p = _argument_parser(db_cfg()); n = p.parse_args(args)
+  d = db_cfg(); p = _argument_parser(d); n = p.parse_args(args)
   if n.subcommand == "_test": return _test(n.verbose)
+  exts = set(d.get("exts", EXTS)); exts.update(d.get("add_exts", ()))
   with dyn(globals(), SHOW_HIDDEN = n.show_hidden,
            USE_COLOUR = n.colour, IGNORECASE = n.ignorecase,
-           NUMERICSORT = n.numeric_sort):
+           NUMERICSORT = n.numeric_sort, EXTS = exts):
     dpath = cwd() / Path(n.dir) if n.dir else cwd()
     try:
       return do_something(n.f, dpath, n) or 0
@@ -742,7 +748,8 @@ DO_ARGS   = "numbers only_indexed todo player filename " \
             "sep replace replace_all include exclude".split()
 CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
                  numeric_sort = bool, numbers = bool,
-                 only_indexed = bool, player = None)
+                 only_indexed = bool, player = None,
+                 exts = list, add_exts = list)
           # player --> PLAYERS.keys()
 
 # NB: uses SHOW_HIDDEN, USE_COLOUR, IGNORECASE, NUMERICSORT as defaults
