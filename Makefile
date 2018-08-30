@@ -25,7 +25,8 @@ clean:
 	find -name __pycache__ -delete
 
 cleanup: clean
-	rm -fr debian/.debhelper debian/files debian/mmm*
+	rm -fr debian/.debhelper debian/files debian/mmm/ \
+	  debian/mmm.debhelper.log debian/mmm.substvars
 
 # NB: maybe not the best place to call fix_mtimes, but dh_auto_install
 # runs before dh_installdocs and we only use the install target for

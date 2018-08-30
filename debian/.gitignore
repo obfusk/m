@@ -1,3 +1,5 @@
 .debhelper
 /files
-/mmm*
+/mmm
+/mmm.debhelper.log
+/mmm.substvars
