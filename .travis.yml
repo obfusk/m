@@ -15,5 +15,3 @@ jobs:
     dist: xenial
     sudo: true
   - python: "pypy3"
-    dist: xenial
-    sudo: true
