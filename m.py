@@ -28,8 +28,8 @@ First, set up some test data
 NB: tests must be run from _test()!  Otherwise the temporary directory
 and monkey-patching are not available.
 
->>> if "TEST_DIR" not in globals():
-...   raise KeyboardInterrupt("*** ABORT ***")
+>>> def abort(): raise KeyboardInterrupt("*** ABORT ***")
+>>> if "TEST_DIR" not in globals(): abort()
 
 >>> d             = TEST_DIR / "media"
 >>> x, y, z, a, b = d / "x.mkv", d / "y.mkv", d / "z.mkv", \
@@ -395,10 +395,16 @@ Error: '/.../more/a.mkv' is not a file in '/.../media'
 >>> runE("unmark foo/bar.mkv") # doctest: +ELLIPSIS
 Error: '/.../bar.mkv' is not a file in '/.../media'
 
->>> runE("alias oops")
-Error: 'oops' is a relative path
->>> runE("alias /oops") # doctest: +ELLIPSIS
-Error: '/.../media' and '/oops' do not resolve to the same path
+>>> current_dir = cwd(); os.chdir(d)
+
+>>> runE("alias more")
+Error: 'more' is a relative path
+
+>>> try: os.chdir(current_dir)
+... except: abort()
+
+>>> runE("alias /tmp") # doctest: +ELLIPSIS
+Error: '/.../media' and '/tmp' do not resolve to the same path
 >>> runE("alias", d = d / "link", x = [d / "more"]) # doctest: +ELLIPSIS
 Error: '/.../.obfusk-m/dir__|...|media|link__....json' already exists
 
@@ -1013,6 +1019,8 @@ def _test(verbose = False):                                     # {{{1
                                                                 # }}}1
 
 def do_something(f, dpath, ns):                                 # {{{1
+  if not dpath.is_dir():
+    raise MError("'{}' is not an (existing) directory".format(dpath))
   params  = inspect.signature(f).parameters
   kw      = { k:v for k,v in vars(ns).items()
                   if k in DO_ARGS and k in params }
@@ -1115,6 +1123,8 @@ def do_index_dir(dpath, _fs):
 def do_alias_dir(dpath, _fs, target):                           # {{{1
   tpath       = Path(target)
   df_a, df_t  = db_dir_file(dpath), db_dir_file(tpath)
+  if not tpath.is_dir():
+    raise MError("'{}' is not an (existing) directory".format(tpath))
   if not tpath.is_absolute():
     raise MError("'{}' is a relative path".format(tpath))
   if dpath.resolve() != tpath.resolve():
