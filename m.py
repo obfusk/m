@@ -17,7 +17,7 @@
 r"""
 m - minimalistic media manager
 
-See README.md for a description and some examples.
+See README.md for additional information and examples.
 
 Examples
 ========
@@ -49,8 +49,8 @@ and monkey-patching are not available.
 True
 
 >>> _clr = { True: "--colour", False: "--no-colour", None: "" }
->>> def run(a, d = d, c = False):
-...   main("-d", str(d), *(_clr[c]+" "+a).split())
+>>> def run(a, d = d, c = False, x = []):
+...   main("-d", str(d), *((_clr[c]+" "+a).split() + list(map(str, x))))
 >>> def runI(s, *a, **k):
 ...   with stdin_from(s): run(*a, **k)
 >>> def runO(*a, **k):
@@ -365,6 +365,21 @@ Playing un?safe?file.mkv ...
 RUN true vlc --fullscreen --play-and-exit -- .../media/un?safe?file.mkv
 
 
+Now, test aliases
+-----------------
+
+>>> (d / "link").symlink_to(d / "more")
+
+>>> run("ls", d = d / "link")
+[ ] a.mkv
+[ ] b.mkv
+>>> run("alias", d = d / "link", x = [d / "more"]) # doctest: +ELLIPSIS
+/.../.obfusk-m/dir__|...|media|link__....json -> dir__|...|media|more__....json
+>>> run("ls", d = d / "link")
+[>] a.mkv 0:04:06
+[x] b.mkv
+
+
 Now, check some errors
 ----------------------
 
@@ -480,6 +495,7 @@ subcommands:
     unmark (u)          mark FILE as new
     skip (s)            mark FILE as skip
     index (i)           index current directory
+    alias               alias directory
     playing             list files marked as playing
     watched             list files marked as done
     skipped             list files marked as skip
@@ -502,6 +518,8 @@ e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'.
 <BLANKLINE>
 NB: file numbers may change when --ignorecase or --numeric-sort is used;
 please use the same sort order when listing and using numbers.
+<BLANKLINE>
+See README.md for additional information and examples.
 
 >>> runH("ls --help")
 usage: m list [-h] [--numbers | --no-numbers]
@@ -570,7 +588,7 @@ Tests
 Check some _assert()s
 ---------------------
 
->>> def dbc(**db): _db_check("x.json", "/some/dir", db)
+>>> def dbc(**db): _db_check(Path("x.json"), "/some/dir", db)
 >>> dbc()
 Traceback (most recent call last):
   ...
@@ -700,6 +718,8 @@ EPILOG = textwrap.dedent("""
 
   NB: file numbers may change when --ignorecase or --numeric-sort is used;
   please use the same sort order when listing and using numbers.
+
+  See README.md for additional information and examples.
 """)
 
 RX_EPILOG = textwrap.dedent("""
@@ -710,6 +730,13 @@ RX_EPILOG = textwrap.dedent("""
   multiple substitutions; choose your substitutions carefully so they
   don't inadvertently affect each other; each --replace runs before
   each --replace-all.
+""")
+
+ALIAS = textwrap.dedent("""
+  Make the current directory an alias for another DIR already in the
+  DB; use this when you want to share the same database entry for
+  different paths that resolve to the same canonical path (e.g. via
+  symlinks).
 """)
 
 class MError(RuntimeError): pass
@@ -743,7 +770,7 @@ def main(*args):                                                # {{{1
       return 1
                                                                 # }}}1
 
-DO_ARGS   = "numbers only_indexed todo player filename " \
+DO_ARGS   = "numbers only_indexed todo player filename target " \
             "flat zero only_files only_dirs quiet " \
             "sep replace replace_all include exclude".split()
 CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
@@ -824,6 +851,7 @@ def _argument_parser(d = {}):                                   # {{{1
   p_index   = _subcommand(s, "index i" + easteregg,
                           "index current directory",
                           do_index_dir)
+  p_alias   = _subcommand(s, "alias", "alias directory", do_alias_dir)
 
   p_playing = _subcommand(s, "playing", "list files marked as playing",
                           do_playing_files)
@@ -896,6 +924,7 @@ def _argument_parser(d = {}):                                   # {{{1
       const = "vlc", help = "play using vlc (the default)")
   for x in [p_play, p_mark, p_unmark, p_skip]:
     x.add_argument("filename", metavar = "FILE")
+  p_alias.add_argument("target", metavar = "DIR")
   for x in [p_playing, p_watched, p_skipped]:
     x.add_argument("--flat", action = "store_true",
       help = "flat list of files instead of grouped by directory")
@@ -944,11 +973,12 @@ def _argument_parser(d = {}):                                   # {{{1
                                                                 # }}}1
 
 def _subcommand(s, names, desc, f, **kw):                       # {{{1
-  name, *aliases = names.split()
+  name, *aliases = names.split(); help = desc
   if "import" in name:
     kw.update(epilog = RX_EPILOG,
               formatter_class = argparse.RawDescriptionHelpFormatter)
-  p = s.add_parser(name, aliases = aliases, help = desc,
+  if "alias" in name: desc = ALIAS
+  p = s.add_parser(name, aliases = aliases, help = help,
                    description = desc, **kw)
   p.set_defaults(f = f)
   return p
@@ -1069,6 +1099,20 @@ def _files_from_spec(dpath, fs, spec, must_exist = True):       # {{{1
 def do_index_dir(dpath, _fs):
   db_update(dpath, {})
 
+def do_alias_dir(dpath, _fs, target):                           # {{{1
+  tpath       = Path(target)
+  df_a, df_t  = db_dir_file(dpath), db_dir_file(tpath)
+  if not tpath.is_absolute():
+    raise MError("'{}' is a relative path".format(tpath))
+  if dpath.resolve() != tpath.resolve():
+    raise MError("'{}' and '{}' do not resolve to the same path"
+                 .format(dpath, tpath))
+  if     df_a.exists(): raise MError("'{}' already exists".format(df_a))
+  if not df_t.exists(): raise MError("'{}' does not exist".format(df_t))
+  df_a.symlink_to(df_t.name)
+  puts(str(df_a), "->", str(df_t.name))
+                                                                # }}}1
+
 def do_playing_files(_dpath, _fs, flat, zero, only_files):
   _print_files_with_state("playing", flat, zero, not only_files)
 
@@ -1179,7 +1223,7 @@ def do_examples(_dpath, _fs):
 
 # === dir_* ===
 
-def dir_iter(dpath, fs = None):
+def dir_iter(dpath, fs):
   if fs is None: fs = db_load(dpath)["files"]
   for fn in dir_files(dpath): yield _state(fn, fs), fn
 
@@ -1194,7 +1238,7 @@ def _state_in_db(what):
 def dir_iter_dirs(dpath):                                       # {{{1
   for sd in dir_dirs(dpath):
     if db_dir_file(dpath / sd).exists():
-      count = _dir_count(dir_iter(dpath / sd))
+      count = _dir_count(dir_iter(dpath / sd, None))
       yield sd, count["playing"], count["new"]
     else:
       yield sd, None, None
@@ -1263,7 +1307,10 @@ def db_update(dpath, files):                                    # {{{1
 def _db_check(df, dpath, db):                                   # {{{1
   _assert(str(df) + " has wrong key(s)",
           sorted(db.keys()) == "dir files".split())
-  _assert(str(df) + " has wrong dir", db["dir"] == str(dpath))
+  _assert(str(df) + " has wrong dir",
+          db["dir"] == str(dpath) or
+          (df.is_symlink() and df.resolve().name ==
+                               db_dir_file(db["dir"]).name))
   _assert(str(df) + " has wrong files value(s)",
           all( x > 0 or x == SKIP if type(x) is int else x is DONE
                for x in db["files"].values() ))
@@ -1284,6 +1331,7 @@ def db_t(fs, fn):
 
 def db_dirs():
   for df in (HOME / CFG).glob("dir__*.json"):
+    if df.is_symlink(): continue
     with df.open() as f: db = json.load(f)
     yield db["dir"], db["files"]
 
@@ -1566,6 +1614,7 @@ _EXAMPLES_REPL = [                                              # {{{1
   (r'>>> runI\(([^,]*), r?"([^"]*)"\)'    , r"$ m \2 # < \1"        ),
   (r'>>> run\w*\("([^"]*)"(?:, (.*))?\)'  , r"$ m \1 # \2"          ),
   (r'\$ m (.*) # d = d / "([^"]*)"'       , r"$ m -d \2 \1"         ),
+  (r'\$ m (.*), x = \[d / "([^"]*)"\]'    , r"$ m \1 /.../\2"       ),
   (r'\$ m (.*) # c = True'                , r"$ m --colour \1"      ),
   (r'\$ m (.*) # c = None'                , r"$ m --colour-auto \1" ),
   (r'\s*#\s*$'                            , ""                      ),

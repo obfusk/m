@@ -23,7 +23,7 @@ help is available using:
     m ls --help   # subcommand (ls in this case) options & argument(s)
     m examples    # show some examples (from the tests)
 
-You should also have received a README.md along with m; when installed
+See README.md for additional information and examples.  When installed
 as a Debian package this should be available at
 _/usr/share/doc/mmm/README.md.gz_.
 

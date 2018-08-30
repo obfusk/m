@@ -182,6 +182,12 @@ example:
 * fix `.exist()` race conditions?
 * use `locale.strcoll` vs `--ignorecase`?
 
+## CAVEATS
+
+Because the `alias` command uses symlinks internally, you should
+probably not create symlinks named `dir__*.json` in `~/.obfusk-m`
+unless you know what you are doing.
+
 ## License
 
 [GPLv3+](https://www.gnu.org/licenses/gpl-3.0.html).
