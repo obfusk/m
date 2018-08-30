@@ -370,6 +370,11 @@ Now, test aliases
 
 >>> (d / "link").symlink_to(d / "more")
 
+>>> db_load(d / "more")["dir"] # doctest: +ELLIPSIS
+'/.../media/more'
+>>> db_load(d / "link")["dir"] # doctest: +ELLIPSIS
+'/.../media/link'
+
 >>> run("ls", d = d / "link")
 [ ] a.mkv
 [ ] b.mkv
@@ -378,6 +383,22 @@ Now, test aliases
 >>> run("ls", d = d / "link")
 [>] a.mkv 0:04:06
 [x] b.mkv
+
+>>> run("unmark 2", d = d / "link")
+>>> run("ls", d = d / "more")
+[>] a.mkv 0:04:06
+[ ] b.mkv
+
+>>> db_load(d / "more")["dir"] # doctest: +ELLIPSIS
+'/.../media/more'
+
+>>> run("mark 2", d = d / "more")
+>>> run("ls", d = d / "link")
+[>] a.mkv 0:04:06
+[x] b.mkv
+
+>>> db_load(d / "link")["dir"] # doctest: +ELLIPSIS
+'/.../media/more'
 
 
 Now, check some errors
@@ -1318,11 +1339,12 @@ def db_load(dpath):
 # TODO: use flock? backup?
 def db_update(dpath, files):                                    # {{{1
   (HOME / CFG).mkdir(exist_ok = True)
-  df, fs  = db_dir_file(dpath), db_load(dpath)["files"]
-  fs_     = { k:v for k,v in {**fs, **files}.items() if v != UNMARK }
-  db      = _db_check(df, dpath, dict(dir = str(dpath), files = fs_))
+  db  = db_load(dpath); dpath_, fs = Path(db["dir"]), db["files"]
+  df  = db_dir_file(dpath_)
+  fs_ = { k:v for k,v in {**fs, **files}.items() if v != UNMARK }
+  db_ = _db_check(df, dpath_, dict(dir = str(dpath_), files = fs_))
   with df.open("w") as f:
-    json.dump(db, f, indent = 2, sort_keys = True)
+    json.dump(db_, f, indent = 2, sort_keys = True)
     f.write("\n")
                                                                 # }}}1
 
