@@ -395,7 +395,7 @@ Error: '/.../more/a.mkv' is not a file in '/.../media'
 >>> runE("unmark foo/bar.mkv") # doctest: +ELLIPSIS
 Error: '/.../bar.mkv' is not a file in '/.../media'
 
->>> current_dir = cwd(); os.chdir(d)
+>>> current_dir = str(cwd()); os.chdir(str(d))
 
 >>> runE("alias more")
 Error: 'more' is a relative path
