@@ -2,12 +2,11 @@ Source: mmm
 Section: utils
 Priority: optional
 Maintainer: Felix C. Stegerman <flx@obfusk.net>
-Build-Depends: debhelper (>=9), dh-python, python3:any (>= 3.5~)
+Build-Depends: debhelper (>=9), dh-python, python3:any (>= 3.5~), pandoc
 Standards-Version: 3.9.8
 Homepage: https://github.com/obfusk/m
 Vcs-Git: https://github.com/obfusk/m.git
 Vcs-Browser: https://github.com/obfusk/m
-X-Python3-Version: >= 3.5
 Rules-Requires-Root: no
 
 Package: mmm

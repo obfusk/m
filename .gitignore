@@ -4,6 +4,8 @@
 htmlcov
 
 /README.rst
+/m.1
+
 /build
 /dist
 /mmm.egg-info

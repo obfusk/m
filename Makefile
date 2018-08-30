@@ -20,7 +20,7 @@ coverage:
 
 clean:
 	rm -fr .coverage htmlcov/
-	rm -fr README.rst build/ dist/ $(PKG).egg-info/
+	rm -fr README.rst m.1 build/ dist/ $(PKG).egg-info/
 	find -name '*.pyc' -delete
 	find -name __pycache__ -delete
 
@@ -30,10 +30,13 @@ cleanup: clean
 # NB: maybe not the best place to call fix_mtimes, but dh_auto_install
 # runs before dh_installdocs and we only use the install target for
 # dpkg-buildpackage anyway.
-install: fix_mtimes
+install: fix_mtimes m.1
 	test -d "$(DESTDIR)"
 	mkdir -p "$(DESTDIR)"/usr/bin
 	cp -i m.py "$(DESTDIR)"/usr/bin/m
+
+%.1: %.1.md
+	pandoc -s -t man -o $@ $<
 
 fix_mtimes:
 	[ -z "$$SOURCE_DATE_EPOCH" ] || \
@@ -51,6 +54,7 @@ _publish: clean package
 	read -r -p "Are you sure? "; \
 	[[ "$$REPLY" == [Yy]* ]] && twine upload dist/*
 
+# NB: run as $ make _dch OLDVERSION=a.b.c NEWVERSION=x.y.z
 _dch:
 	export DEBEMAIL="$$( git config --get user.email )"; \
 	dch -v $(NEWVERSION) --release-heuristic log && \

@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-07-05
+    Date        : 2018-08-30
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.3.0
@@ -72,7 +72,7 @@ for more examples.
 ```bash
 $ m --help      # global options & subcommands
 $ m ls --help   # subcommand (ls in this case) options & argument(s)
-$ m examples    # show some examples from the tests
+$ m examples    # show some examples (from the tests)
 ```
 
 ## Requirements
@@ -147,7 +147,7 @@ example:
 
 ## TODO
 
-* update README + version + package!
+* update README + version (4x + dch) + package (deb + pip)!
 * `ack TODO`
 
 <!-- -->
