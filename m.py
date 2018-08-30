@@ -395,6 +395,19 @@ Error: '/.../more/a.mkv' is not a file in '/.../media'
 >>> runE("unmark foo/bar.mkv") # doctest: +ELLIPSIS
 Error: '/.../bar.mkv' is not a file in '/.../media'
 
+>>> runE("alias oops")
+Error: 'oops' is a relative path
+>>> runE("alias /oops") # doctest: +ELLIPSIS
+Error: '/.../media' and '/oops' do not resolve to the same path
+>>> runE("alias", d = d / "link", x = [d / "more"]) # doctest: +ELLIPSIS
+Error: '/.../.obfusk-m/dir__|...|media|link__....json' already exists
+
+>>> (d / "one_more").mkdir()
+>>> (d / "link2").symlink_to(d / "one_more")
+
+>>> runE("alias", d = d / "link2", x = [d / "one_more"]) # doctest: +ELLIPSIS
+Error: '/.../.obfusk-m/dir__|...|media|one_more__....json' does not exist
+
 
 Now, check importing
 --------------------
