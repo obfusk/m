@@ -1,3 +1,32 @@
+mmm (0.4.0) UNRELEASED; urgency=medium
+
+  * TODO++
+  * make build reproducible
+  * Makefile: add NB regarding fix_mtimes
+  * update copyright to 2018
+  * _state_in_db(1) is broken since True == 1 in Python
+  * fix _state_in_db(1)
+  * db_t() is a little bit broken since True == 1 in Python
+  * fix db_t(); NB: True == 1
+  * ignore broken pipe to prevent backtrace w/ head, tail etc.
+  * use @handle_broken_pipe instead of catching all broken pipe errors
+  * + --numeric-sort
+  * use errno directly (instead of os.errno; broke w/ py 3.7)
+  * use floats for --numeric-sort
+  * make EXTS configurable, default to video only and add .webm
+  * + man page; (~ tiny documentation improvements)
+  * fix man page installation
+  * fix make cleanup & gitignore
+  * + alias
+  * more tests for alias command errors
+  * fix tests for python 3.5; update travis python versions
+  * travis: use xenial
+  * another python 3.5 tests fix; hopefully fix travis as well
+  * fix travis config (I hope)
+  * fix travis pypy3
+
+ -- Felix C. Stegerman <flx@obfusk.net>  Thu, 30 Aug 2018 23:39:13 +0200
+
 mmm (0.3.0) UNRELEASED; urgency=medium
 
   * fix typo in Makefile
