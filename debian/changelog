@@ -1,3 +1,11 @@
+mmm (0.4.1) UNRELEASED; urgency=medium
+
+  * fix DB corruption related to the alias command
+  * README: update build dependencies
+  * cleanup debian/changelog
+
+ -- Felix C. Stegerman <flx@obfusk.net>  Fri, 31 Aug 2018 18:40:09 +0200
+
 mmm (0.4.0) UNRELEASED; urgency=medium
 
   * fix bug caused by True == 1 in Python

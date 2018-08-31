@@ -1,6 +1,6 @@
-% m(1) v0.4.0 | General Commands Manual
+% m(1) v0.4.1 | General Commands Manual
 % Felix C. Stegerman <flx@obfusk.net>
-% 2018-08-30
+% 2018-08-31
 
 # NAME
 
