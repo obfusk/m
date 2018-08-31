@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-08-30
+    Date        : 2018-08-31
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.4.0
@@ -118,7 +118,7 @@ $ pip3 install --user mmm   # for Debian; on other OS's you may need
 ### Building a Debian package
 
 ```bash
-$ sudo apt install debhelper dh-python    # install build dependencies
+$ sudo apt install debhelper dh-python pandoc # install build dependencies
 $ cd /some/convenient/dir
 $ git clone https://github.com/obfusk/m.git obfusk-m
 $ cd obfusk-m
