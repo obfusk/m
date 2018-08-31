@@ -1,67 +1,32 @@
 mmm (0.4.0) UNRELEASED; urgency=medium
 
-  * TODO++
+  * fix bug caused by True == 1 in Python
+  * fix Python 3.7 support and Python 3.5 tests support
+  * various fixes, improvements & refactoring
   * make build reproducible
-  * Makefile: add NB regarding fix_mtimes
-  * update copyright to 2018
-  * _state_in_db(1) is broken since True == 1 in Python
-  * fix _state_in_db(1)
-  * db_t() is a little bit broken since True == 1 in Python
-  * fix db_t(); NB: True == 1
   * ignore broken pipe to prevent backtrace w/ head, tail etc.
-  * use @handle_broken_pipe instead of catching all broken pipe errors
-  * + --numeric-sort
-  * use errno directly (instead of os.errno; broke w/ py 3.7)
-  * use floats for --numeric-sort
   * make EXTS configurable, default to video only and add .webm
-  * + man page; (~ tiny documentation improvements)
-  * fix man page installation
-  * fix make cleanup & gitignore
-  * + alias
-  * more tests for alias command errors
-  * fix tests for python 3.5; update travis python versions
-  * travis: use xenial
-  * another python 3.5 tests fix; hopefully fix travis as well
-  * fix travis config (I hope)
-  * fix travis pypy3
+  * added man page
+  * new: --numeric-sort
+  * new: alias
 
  -- Felix C. Stegerman <flx@obfusk.net>  Thu, 30 Aug 2018 23:39:13 +0200
 
 mmm (0.3.0) UNRELEASED; urgency=medium
 
-  * fix typo in Makefile
-  * test hidden files (breaks)
-  * hide dotfiles (fixed)
-  * add --show-hidden; add & use dyn()
-  * README: mention --help; subcommands: refactor + add description
-  * update TODO; unmark nonexistent is OK; use MError, redirect_*
-  * added --numbers, mark 1-12 (etc), db-file; test --help
-  * + mpv support; + test run errors; small improvements
-  * fix test for python3.5 and pypy3 (small output difference)
-  * + config.json, --no-*, --vlc
-  * add info about FILE number(s) to help; update TODO
-  * + debian/; update Makefile
-  * README: requirements, git, .deb
-  * _assert() config.json; some more examples headers
-  * distinguish examples from tests in docstring
-  * only use safe() when stdout is a tty; easier w/ puts()
-  * debian package: move cleanup to make cleanup, R^3
-  * mpv: fix counting as watched (i.e. if ends during last few seconds)
-  * commands: + next-new, continue = next; refactor, DONE, UNMARK
-  * allow file spec to be a state: e.g. mark playing works now
-  * + --ignorecase, --only-indexed; some refactoring
-  * + todo, ld --todo; always honour -i; only load db if used
-  * + import-{playing,watched}, *-sql, --replace etc.; refactor a bit
-  * clarify import format
-  * README: TODO++
-  * todo: ignore missing dirs, print unless --quiet
-  * + m examples
-  * split EXAMPLES from do_examples(); + :)
-  * allow multiple --replace{,-all}
-  * TODO++
-  * note that --replace{,-all} can be used multiple times
-  * Makefile: + _dch
-  * Makefile: get DEBEMAIL from git
+  * various fixes, improvements & refactoring
+  * hide dotfiles
+  * README: mention --help
+  * README: installation instructions
+  * new: --show-hidden
+  * new: --numbers, mark 1-12 (etc), db-file
+  * new: mpv support, config.json
+  * new: next-new, continue = next
+  * new: mark playing etc.
+  * new: --ignorecase, --only-indexed
+  * new: todo, ld --todo
+  * new: import-{playing,watched}, *-sql, --replace etc.
+  * new: examples
 
  -- Felix C. Stegerman <flx@obfusk.net>  Tue, 26 Dec 2017 12:12:42 +0100
 
