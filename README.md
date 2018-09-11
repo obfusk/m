@@ -2,15 +2,17 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-08-31
+    Date        : 2018-09-12
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.4.1
+    License     : GPLv3+
 
 <!-- }}}1 -->
 
 [![PyPI Version](https://img.shields.io/pypi/v/mmm.svg)](https://pypi.python.org/pypi/mmm)
 [![Build Status](https://travis-ci.org/obfusk/m.svg?branch=master)](https://travis-ci.org/obfusk/m)
+[![GPLv3+](https://img.shields.io/badge/license-GPLv3+-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 ## Description
 
@@ -190,6 +192,6 @@ unless you know what you are doing.
 
 ## License
 
-[GPLv3+](https://www.gnu.org/licenses/gpl-3.0.html).
+[![GPLv3+](https://www.gnu.org/graphics/gplv3-127x51.png)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 <!-- vim: set tw=70 sw=2 sts=2 et fdm=marker : -->
