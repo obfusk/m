@@ -624,7 +624,7 @@ Error: could not play file 'x.mkv': Command ... returned non-zero exit status 1.
 >>> runE("play x.mkv") # doctest: +ELLIPSIS
 Playing x.mkv ...
 RUN does-not-exist vlc --fullscreen --play-and-exit -- .../media/x.mkv
-Error: could not play file 'x.mkv': No such file or directory: 'does-not-exist'
+Error: could not play file 'x.mkv': No such file or directory...
 
 >>> MPVCMD[0] = "false"
 >>> runE("play --mpv x.mkv") # doctest: +ELLIPSIS
@@ -1509,8 +1509,11 @@ def _pty_run(cmd, testing = False, bufsize = 1024):             # {{{1
   retcode, signal = retcodesig >> 8, retcodesig & 0xff
   if retcode == 127 and b"*** CHILD exec() FAILED ***" in buf \
                     and b"FileNotFoundError" in buf:
+    # NB: trying to produce an identical error as w/ vlc, but python
+    # 3.8-dev no longer shows the file name.  Fixing for now w/ more
+    # permissive test.  Should look into this when 3.8 is released.
     e = FileNotFoundError(errno.ENOENT,
-          "No such file or directory: '{}'".format(cmd[0]))
+          "No such file or directory: '{}'".format(cmd[0]))     # TODO
     e.filename = cmd[0]
     raise e
   if retcode: raise subprocess.CalledProcessError(retcode, cmd)
