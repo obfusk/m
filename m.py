@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2018-08-31
+# Date        : 2018-09-12
 #
 # Copyright   : Copyright (C) 2018  Felix C. Stegerman
 # Version     : v0.4.1
@@ -368,7 +368,7 @@ RUN true vlc --fullscreen --play-and-exit -- .../media/un?safe?file.mkv
 Now, test aliases
 -----------------
 
->>> (d / "link").symlink_to(d / "more")
+>>> for _d in [d / "link", d / "link2"]: _d.symlink_to(d / "more")
 
 >>> db_load(d / "more")["dir"] # doctest: +ELLIPSIS
 '/.../media/more'
@@ -400,6 +400,9 @@ Now, test aliases
 >>> db_load(d / "link")["dir"] # doctest: +ELLIPSIS
 '/.../media/more'
 
+>>> run("alias", d = d / "link2") # doctest: +ELLIPSIS
+/.../.obfusk-m/dir__|...|media|link2__....json -> dir__|...|media|more__....json
+
 
 Now, check some errors
 ----------------------
@@ -430,10 +433,21 @@ Error: '/.../media' and '/tmp' do not resolve to the same path
 Error: '/.../.obfusk-m/dir__|...|media|link__....json' already exists
 
 >>> (d / "one_more").mkdir()
->>> (d / "link2").symlink_to(d / "one_more")
+>>> (d / "link3").symlink_to(d / "one_more")
 
->>> runE("alias", d = d / "link2", x = [d / "one_more"]) # doctest: +ELLIPSIS
+>>> runE("alias", d = d / "link3", x = [d / "one_more"]) # doctest: +ELLIPSIS
 Error: '/.../.obfusk-m/dir__|...|media|one_more__....json' does not exist
+>>> runE("alias", d = d / "link3") # doctest: +ELLIPSIS
+No alias candidates found.
+
+>>> for _d in [d / "link4", d / "link5"]: _d.symlink_to(d / "more")
+
+>>> runE("index", d = d / "link4")
+>>> runE("alias", d = d / "link5") # doctest: +ELLIPSIS
+Multiple alias candidates found:
+  /.../media/link4
+  /.../media/more
+Please supply one of these as an argument.
 
 
 Now, check importing
@@ -490,9 +504,11 @@ Ignoring nonexistent directory '/some/other/watched/file'.
 Ignoring nonexistent directory '/some/playing/file'.
 Ignoring nonexistent directory '/some/watched/file'.
 (   1!) /.../media
+(   2!) /.../media/link4
 (1> 0!) /.../media/more
 >>> runE("todo --quiet") # doctest: +ELLIPSIS
 (   1!) /.../media
+(   2!) /.../media/link4
 (1> 0!) /.../media/more
 
 
@@ -719,10 +735,14 @@ CONT_BACK     = 5                                               # TODO
 END_SECS      = 5                                               # TODO
 PLAYER        = "vlc"
 
+PLAYING       = "Playing"
 NOFILES       = "No files to play."
 IMPORTED      = "Imported {} file(s) in {} dir(s)."
 IGNORE_UNK    = "Ignoring unknown file '{}'."
 IGNORE_NODIR  = "Ignoring nonexistent directory '{}'."
+NOALIAS       = "No alias candidates found."
+MULTIALIAS    = "Multiple alias candidates found:"
+CHOOSEALIAS   = "Please supply one of these as an argument."
 
 VLCCMD        = "vlc --fullscreen --play-and-exit".split()      # dyn
 VLCCONT       = lambda t: ["--start-time", str(int(t))]
@@ -752,6 +772,8 @@ STDERR        = sys.stderr
 
 SKIP, DONE, UNMARK = -1, True, False  # NB: True == 1
 
+RAWFMT        = argparse.RawDescriptionHelpFormatter
+
 EPILOG = textwrap.dedent("""
   NB: FILE is a file name, state or number(s);
   e.g. '1', '1-5', '1,4-7', 'playing', 'new' or 'all'.
@@ -777,6 +799,10 @@ ALIAS = textwrap.dedent("""
   DB; use this when you want to share the same database entry for
   different paths that resolve to the same canonical path (e.g. via
   symlinks).
+
+  If you do not supply the target DIR as an argument, the DB will be
+  searched: if a single match is found it will be used as the target
+  DIR; none or multiple matches will result in an error message.
 """)
 
 class MError(RuntimeError): pass
@@ -822,7 +848,7 @@ CFG_ARGS  = dict(show_hidden = bool, colour = bool, ignorecase = bool,
 # NB: uses SHOW_HIDDEN, USE_COLOUR, IGNORECASE, NUMERICSORT as defaults
 def _argument_parser(d = {}):                                   # {{{1
   p = argparse.ArgumentParser(description = DESC, epilog = EPILOG,
-        formatter_class = argparse.RawDescriptionHelpFormatter)
+        formatter_class = RAWFMT)
   p.add_argument("--version", action = "version",
                  version = "%(prog)s {}".format(__version__))
   p.add_argument("--dir", "-d", metavar = "DIR",
@@ -964,7 +990,7 @@ def _argument_parser(d = {}):                                   # {{{1
       const = "vlc", help = "play using vlc (the default)")
   for x in [p_play, p_mark, p_unmark, p_skip]:
     x.add_argument("filename", metavar = "FILE")
-  p_alias.add_argument("target", metavar = "DIR")
+  p_alias.add_argument("target", metavar = "DIR", nargs = "?")
   for x in [p_playing, p_watched, p_skipped]:
     x.add_argument("--flat", action = "store_true",
       help = "flat list of files instead of grouped by directory")
@@ -1014,12 +1040,10 @@ def _argument_parser(d = {}):                                   # {{{1
 
 def _subcommand(s, names, desc, f, **kw):                       # {{{1
   name, *aliases = names.split(); help = desc
-  if "import" in name:
-    kw.update(epilog = RX_EPILOG,
-              formatter_class = argparse.RawDescriptionHelpFormatter)
-  if "alias" in name: desc = ALIAS
+  if "import" in name: kw.update(epilog = RX_EPILOG)
+  if "alias"  in name: desc = ALIAS
   p = s.add_parser(name, aliases = aliases, help = help,
-                   description = desc, **kw)
+                   description = desc, formatter_class = RAWFMT, **kw)
   p.set_defaults(f = f)
   return p
                                                                 # }}}1
@@ -1094,7 +1118,7 @@ def do_play_next_new(dpath, fs, player):
 
 def _play_file_if(dpath, fs, fn, player):
   if fn: play_file(dpath, fs, fn, player)
-  else: print(NOFILES)
+  else: puts(NOFILES)
 
 def do_play_file(dpath, fs, filename, player):
   for fn in _files_from_spec(dpath, fs, filename):
@@ -1142,6 +1166,17 @@ def do_index_dir(dpath, _fs):
   db_update(dpath, {})
 
 def do_alias_dir(dpath, _fs, target):                           # {{{1
+  if target is None:
+    dirs = sorted_(_alias_candidates_of(dpath))
+    if len(dirs) == 0:
+      puts(NOALIAS)
+      return 1
+    elif len(dirs) > 1:
+      puts(MULTIALIAS)
+      for t in dirs: puts("  " + str(t))
+      puts(CHOOSEALIAS)
+      return 1
+    target, = dirs
   tpath       = Path(target)
   df_a, df_t  = db_dir_file(dpath), db_dir_file(tpath)
   if not tpath.is_dir():
@@ -1156,6 +1191,11 @@ def do_alias_dir(dpath, _fs, target):                           # {{{1
   df_a.symlink_to(df_t.name)
   puts(str(df_a), "->", str(df_t.name))
                                                                 # }}}1
+
+def _alias_candidates_of(dpath):
+  dpath_r = dpath.resolve()
+  for dpath_a in ( Path(dpath_s) for dpath_s, _fs in db_dirs() ):
+    if dpath_a.resolve() == dpath_r: yield dpath_a
 
 def do_playing_files(_dpath, _fs, flat, zero, only_files):
   _print_files_with_state("playing", flat, zero, not only_files)
@@ -1242,7 +1282,7 @@ def _import(repl, repl_all, incl, excl, it, state = DONE):      # {{{1
     for rx, rp in repl_all: fp_s = re.sub(rx, rp, fp_s)
     fp = Path(fp_s); data[fp.parent][fp.name] = st
   for dpath, fs in data.items(): db_update(dpath, fs)
-  print(IMPORTED.format(sum(map(len, data.values())), len(data)))
+  puts(IMPORTED.format(sum(map(len, data.values())), len(data)))
                                                                 # }}}1
 
 def do_kodi_import_watched(_dpath, _fs, filename, replace,
@@ -1374,11 +1414,16 @@ def db_t(fs, fn):
   t = fs.get(fn)
   return t if type(t) is int and t > 0 else None
 
+# NB: not sorted
 def db_dirs():
-  for df in (HOME / CFG).glob("dir__*.json"):
-    if df.is_symlink(): continue
+  for df in db_json_files():
     with df.open() as f: db = json.load(f)
     yield db["dir"], db["files"]
+
+def db_json_files(symlinks = False):
+  for df in (HOME / CFG).glob("dir__*.json"):
+    if not symlinks and df.is_symlink(): continue
+    yield df
 
 # === playing & vlc & mpv ===
 
@@ -1386,7 +1431,7 @@ def db_dirs():
 def play_file(dpath, fs, fn, player = None):                    # {{{1
   t     = db_t(fs, fn); t_ = max(0, t - CONT_BACK) if t else 0
   etc   = "from " + fmt_time(t) + " " if t else ""
-  puts("Playing", fn, etc + "...")
+  puts(PLAYING, fn, etc + "...")
   try:
     t2 = PLAYERS[player or PLAYER](str(dpath / fn), t_)
   except (subprocess.CalledProcessError, FileNotFoundError) as e:
