@@ -526,6 +526,7 @@ Now, check --help
 usage: m [-h] [--version] [--dir DIR] [--show-hidden | --no-show-hidden]
          [--colour | --no-colour | --auto-colour]
          [--ignorecase | --no-ignorecase] [--numeric-sort | --no-numeric-sort]
+         [--safe]
          {list,l,ls,...}
          ...
 <BLANKLINE>
@@ -544,6 +545,8 @@ optional arguments:
   --no-ignorecase
   --numeric-sort, -N    sort files & dirs numerically
   --no-numeric-sort
+  --safe                show non-printable characters as ? (the default when
+                        stdout is a tty)
 <BLANKLINE>
 subcommands:
   {list,l,ls,...,_test}
@@ -769,7 +772,7 @@ INFOCOLOUR    = dict(INFOCOLOUR_L, new = None)
 FILESPEC      = re.compile(r"all|(\d+(-\d+)?,)*(\d+(-\d+)?)")
 
 STDOUT_TTY    = sys.stdout.isatty()
-USE_SAFE      = STDOUT_TTY                                      # dyn
+USE_SAFE      = STDOUT_TTY            # NB: dyn by --safe (and _test)
 
 SHOW_HIDDEN   = False                 # NB: dyn by --[no-]show-hidden
 USE_COLOUR    = STDOUT_TTY            # NB: dyn by --[no-]colour
@@ -827,7 +830,7 @@ def handle_broken_pipe(f):                                      # {{{1
 
 # === main & related functions ===
 
-# NB: dyn SHOW_HIDDEN, USE_COLOUR, IGNORECASE, NUMERICSORT, EXTS
+# NB: dyn SHOW_HIDDEN, USE_COLOUR, IGNORECASE, NUMERICSORT, EXTS, USE_SAFE
 # TODO: use threading.local?
 def main(*args):                                                # {{{1
   d = db_cfg(); p = _argument_parser(d); n = p.parse_args(args)
@@ -835,7 +838,8 @@ def main(*args):                                                # {{{1
   exts = set(d.get("exts", EXTS)); exts.update(d.get("add_exts", ()))
   with dyn(globals(), SHOW_HIDDEN = n.show_hidden,
            USE_COLOUR = n.colour, IGNORECASE = n.ignorecase,
-           NUMERICSORT = n.numeric_sort, EXTS = exts):
+           NUMERICSORT = n.numeric_sort, EXTS = exts,
+           USE_SAFE = USE_SAFE or n.safe):
     dpath = cwd() / Path(n.dir) if n.dir else cwd()
     try:
       return do_something(n.f, dpath, n) or 0
@@ -894,6 +898,10 @@ def _argument_parser(d = {}):                                   # {{{1
                   help = "sort files & dirs numerically")
   g4.add_argument("--no-numeric-sort", action = "store_false",
                   dest = "numeric_sort")
+
+  p.add_argument("--safe", action = "store_true",
+                 help = "show non-printable characters as ? "
+                        "(the default when stdout is a tty)")
 
   s = p.add_subparsers(title = "subcommands", dest = "subcommand")
   s.required = True           # https://bugs.python.org/issue9253
