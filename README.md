@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-09-12
+    Date        : 2018-09-13
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.4.1
@@ -68,6 +68,16 @@ Commands include: `list`/`ls`, `list-dirs`/`ld`, `list-all`/`la`,
 
 See also the tests in the source code (also available as `m examples`)
 for more examples.
+
+### Command-line
+
+m is designed to work well with other command-line tools:
+
+```bash
+$ m --colour ld | column
+$ m --colour ls | tail
+$ cat "$( m db-file )" | jq .dir
+```
 
 ## Help
 

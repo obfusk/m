@@ -5,7 +5,7 @@
 #
 # File        : m.py
 # Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-# Date        : 2018-09-12
+# Date        : 2018-09-13
 #
 # Copyright   : Copyright (C) 2018  Felix C. Stegerman
 # Version     : v0.4.1
@@ -448,6 +448,8 @@ Multiple alias candidates found:
   /.../media/link4
   /.../media/more
 Please supply one of these as an argument.
+>>> runE("alias", d = d / "link5", x = [d / "link"]) # doctest: +ELLIPSIS
+Error: '/.../.obfusk-m/dir__|...|media|link__....json' is itself an alias
 
 
 Now, check importing
@@ -556,7 +558,7 @@ subcommands:
     watched             list files marked as done
     skipped             list files marked as skip
     todo (unfinished)   list directories with files marked as playing or new
-    db-file             print path to DB file
+    db-file             print path to (would-be) DB file
     import-watched      import watched data from stdin: each line is a file
                         path
     import-playing      import playing data from stdin: each line is a file
@@ -931,7 +933,8 @@ def _argument_parser(d = {}):                                   # {{{1
                           "playing or new",
                           do_todo_dirs)
 
-  p_dbfile  = _subcommand(s, "db-file", "print path to DB file",
+  p_dbfile  = _subcommand(s, "db-file",
+                          "print path to (would-be) DB file",
                           do_dbfile)
 
   p_imp_w   = _subcommand(s, "import-watched",
@@ -1188,6 +1191,8 @@ def do_alias_dir(dpath, _fs, target):                           # {{{1
                  .format(dpath, tpath))
   if     df_a.exists(): raise MError("'{}' already exists".format(df_a))
   if not df_t.exists(): raise MError("'{}' does not exist".format(df_t))
+  if df_t.is_symlink():
+    raise MError("'{}' is itself an alias".format(df_t))
   df_a.symlink_to(df_t.name)
   puts(str(df_a), "->", str(df_t.name))
                                                                 # }}}1
@@ -1246,7 +1251,7 @@ def do_todo_dirs(_dpath, _fs, only_dirs, quiet):                # {{{1
                                                                 # }}}1
 
 def do_dbfile(dpath, _fs):
-  puts(str(db_dir_file(dpath)))
+  puts(str(db_dir_file(dpath)))   # NB: need not exist
 
 def do_import_watched(_dpath, _fs, zero, replace, replace_all,
                       include, exclude):
