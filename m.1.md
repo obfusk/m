@@ -36,19 +36,18 @@ up-to-date information.
 | list, l, ls
 | list-dirs, ld
 | list-all, la
-| next, n
-| continue, cont, c
+| next, n, continue, cont, c
 | next-new, nn
 | play, p
 | mark, m
 | unmark, u
 | skip, s
 | index, i
+| alias
 | playing
 | watched
 | skipped
-| todo
-| unfinished
+| todo, unfinished
 | import-watched
 | import-playing
 | kodi-import-watched

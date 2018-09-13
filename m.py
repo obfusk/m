@@ -370,10 +370,10 @@ Now, test aliases
 
 >>> for _d in [d / "link", d / "link2"]: _d.symlink_to(d / "more")
 
->>> db_load(d / "more")["dir"] # doctest: +ELLIPSIS
-'/.../media/more'
->>> db_load(d / "link")["dir"] # doctest: +ELLIPSIS
-'/.../media/link'
+>>> run("resolve-alias", d = d / "more") # doctest: +ELLIPSIS
+/.../media/more
+>>> run("resolve-alias", d = d / "link") # doctest: +ELLIPSIS
+/.../media/link
 
 >>> run("ls", d = d / "link")
 [ ] a.mkv
@@ -389,16 +389,16 @@ Now, test aliases
 [>] a.mkv 0:04:06
 [ ] b.mkv
 
->>> db_load(d / "more")["dir"] # doctest: +ELLIPSIS
-'/.../media/more'
+>>> run("resolve-alias", d = d / "more") # doctest: +ELLIPSIS
+/.../media/more
 
 >>> run("mark 2", d = d / "more")
 >>> run("ls", d = d / "link")
 [>] a.mkv 0:04:06
 [x] b.mkv
 
->>> db_load(d / "link")["dir"] # doctest: +ELLIPSIS
-'/.../media/more'
+>>> run("resolve-alias", d = d / "link") # doctest: +ELLIPSIS
+/.../media/more
 
 >>> run("alias", d = d / "link2") # doctest: +ELLIPSIS
 /.../.obfusk-m/dir__|...|media|link2__....json -> dir__|...|media|more__....json
@@ -406,6 +406,9 @@ Now, test aliases
 
 Now, check some errors
 ----------------------
+
+>>> runE("ls", d = d / "nonexistent") # doctest: +ELLIPSIS
+Error: '/.../media/nonexistent' is not an (existing) directory
 
 >>> runE("mark /foo/bar/baz.mkv") # doctest: +ELLIPSIS
 Error: '/foo/bar/baz.mkv' does not start with '/.../media'
@@ -421,6 +424,8 @@ Error: '/.../bar.mkv' is not a file in '/.../media'
 
 >>> current_dir = str(cwd()); os.chdir(str(d))
 
+>>> runE("alias", x = [d / "nonexistent"]) # doctest: +ELLIPSIS
+Error: '/.../media/nonexistent' is not an (existing) directory
 >>> runE("alias more")
 Error: 'more' is a relative path
 
@@ -559,6 +564,7 @@ subcommands:
     skipped             list files marked as skip
     todo (unfinished)   list directories with files marked as playing or new
     db-file             print path to (would-be) DB file
+    resolve-alias       print target path if alias, $PWD otherwise
     import-watched      import watched data from stdin: each line is a file
                         path
     import-playing      import playing data from stdin: each line is a file
@@ -936,6 +942,9 @@ def _argument_parser(d = {}):                                   # {{{1
   p_dbfile  = _subcommand(s, "db-file",
                           "print path to (would-be) DB file",
                           do_dbfile)
+  p_resolve = _subcommand(s, "resolve-alias",
+                          "print target path if alias, $PWD otherwise",
+                          do_resolve_alias)
 
   p_imp_w   = _subcommand(s, "import-watched",
                           "import watched data from stdin: "
@@ -1189,8 +1198,10 @@ def do_alias_dir(dpath, _fs, target):                           # {{{1
   if dpath.resolve() != tpath.resolve():
     raise MError("'{}' and '{}' do not resolve to the same path"
                  .format(dpath, tpath))
-  if     df_a.exists(): raise MError("'{}' already exists".format(df_a))
-  if not df_t.exists(): raise MError("'{}' does not exist".format(df_t))
+  if df_a.exists():
+    raise MError("'{}' already exists".format(df_a))
+  if not df_t.exists():
+    raise MError("'{}' does not exist".format(df_t))
   if df_t.is_symlink():
     raise MError("'{}' is itself an alias".format(df_t))
   df_a.symlink_to(df_t.name)
@@ -1252,6 +1263,9 @@ def do_todo_dirs(_dpath, _fs, only_dirs, quiet):                # {{{1
 
 def do_dbfile(dpath, _fs):
   puts(str(db_dir_file(dpath)))   # NB: need not exist
+
+def do_resolve_alias(dpath, _fs):
+  puts(db_load(dpath)["dir"])
 
 def do_import_watched(_dpath, _fs, zero, replace, replace_all,
                       include, exclude):
@@ -1521,7 +1535,8 @@ def _pty_run(cmd, testing = False, bufsize = 1024):             # {{{1
           "No such file or directory: '{}'".format(cmd[0]))     # TODO
     e.filename = cmd[0]
     raise e
-  if retcode: raise subprocess.CalledProcessError(retcode, cmd)
+  if retcode:
+    raise subprocess.CalledProcessError(retcode, cmd)
   return buf, -signal or retcode
                                                                 # }}}1
 
