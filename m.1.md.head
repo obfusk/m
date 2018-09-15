@@ -1,0 +1,12 @@
+% m(1) v0.4.1 | General Commands Manual
+% Felix C. Stegerman <flx@obfusk.net>
+% 2018-09-15
+
+# NAME
+
+m - minimalistic media manager
+
+# SYNOPSIS
+
+m \[\<options>] \<command> \[\<command-specific-options>] \[\<args>]
+

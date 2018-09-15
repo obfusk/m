@@ -5,6 +5,9 @@ PKG       := mmm
 
 TOUCH     := README.md debian/copyright
 
+RM_SECTS  := Description Examples Help Configuration CAVEATS
+RM_SKIP   := 'minimalistic media manager'
+
 .PHONY: test test_verbose coverage clean cleanup install fix_mtimes \
         package _publish _dch
 
@@ -20,7 +23,7 @@ coverage:
 
 clean:
 	rm -fr .coverage htmlcov/
-	rm -fr README.rst m.1 build/ dist/ $(PKG).egg-info/
+	rm -fr README.rst m.1 m.1.md build/ dist/ $(PKG).egg-info/
 	find -name '*.pyc' -delete
 	find -name __pycache__ -delete
 
@@ -36,6 +39,15 @@ install: fix_mtimes m.1
 	test -d "$(DESTDIR)"
 	mkdir -p "$(DESTDIR)"/usr/bin
 	cp -i m.py "$(DESTDIR)"/usr/bin/m
+
+m.1.md: README.md m.1.md.head m.1.md.tail
+	{ cat m.1.md.head; \
+	  for sec in $(RM_SECTS); do \
+	    sed -nr '/^## '"$$sec"'/,/^## / {s/^#+(# .*)/\U\1\L/;p}' \
+	      < README.md | head -n -1 | grep -vF $(RM_SKIP); \
+	  done; \
+	  cat m.1.md.tail; \
+	} > $@
 
 %.1: %.1.md
 	pandoc -s -t man -o $@ $<
