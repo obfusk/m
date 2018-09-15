@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-09-13
+    Date        : 2018-09-15
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.4.1
@@ -161,6 +161,7 @@ example:
 
 * update README + version (4x + dch) + package (deb + pip)!
 * `ack TODO`
+* debian Tag:?
 
 <!-- -->
 

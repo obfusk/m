@@ -2,8 +2,8 @@ Source: mmm
 Section: utils
 Priority: optional
 Maintainer: Felix C. Stegerman <flx@obfusk.net>
-Build-Depends: debhelper (>=9), dh-python, python3:any (>= 3.5~), pandoc
-Standards-Version: 3.9.8
+Build-Depends: debhelper (>=10), dh-python, python3:any (>=3.5~), pandoc
+Standards-Version: 4.2.1
 Homepage: https://github.com/obfusk/m
 Vcs-Git: https://github.com/obfusk/m.git
 Vcs-Browser: https://github.com/obfusk/m
@@ -12,7 +12,7 @@ Rules-Requires-Root: no
 Package: mmm
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}, ${python3:Depends}
+Depends: python3:any (>=3.5~), ${misc:Depends}
 Recommends: vlc | mpv
 Description: minimalistic media manager
  m keeps track of which files you've played (or are still playing) and
