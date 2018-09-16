@@ -14,6 +14,7 @@ Architecture: all
 Multi-Arch: foreign
 Depends: python3:any (>=3.5~), ${misc:Depends}
 Recommends: vlc | mpv
+Suggests: mmm-gui
 Description: minimalistic media manager
  m keeps track of which files you've played (or are still playing) and
  thus allows you to easily continue playing the next file (using vlc

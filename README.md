@@ -79,6 +79,12 @@ $ m --colour ls | tail
 $ cat "$( m db-file )" | jq .dir
 ```
 
+## GUI
+
+In situations where you prefer simple keybindings to typing on the
+command-line, you can use the [m-gui](https://github.com/obfusk/m-gui)
+wrapper.
+
 ## Help
 
 ```bash
