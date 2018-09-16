@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-09-15
+    Date        : 2018-09-16
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.4.1
@@ -162,6 +162,14 @@ example:
 * update README + version (4x + dch) + package (deb + pip)!
 * `ack TODO`
 * debian Tag:?
+
+<!-- -->
+
+* use markdown for README now that pypi supports it
+  - as soon as I have wheel >= 0.31.0 in Debian
+  - no need to build `README.rst`
+  - `setup.py`: `with_name("README.md")`,
+    `long_description_content_type = "text/markdown"`
 
 <!-- -->
 
