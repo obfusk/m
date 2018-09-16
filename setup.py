@@ -3,7 +3,7 @@ from setuptools import setup
 
 import m
 
-long_description    = Path(__file__).with_name("README.rst").read_text()
+long_description    = Path(__file__).with_name("README.md").read_text()
 
 setup(
   name              = "mmm",
