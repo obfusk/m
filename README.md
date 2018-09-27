@@ -2,7 +2,7 @@
 
     File        : README.md
     Maintainer  : Felix C. Stegerman <flx@obfusk.net>
-    Date        : 2018-09-16
+    Date        : 2018-09-27
 
     Copyright   : Copyright (C) 2018  Felix C. Stegerman
     Version     : v0.4.2
@@ -142,6 +142,21 @@ $ git clone https://github.com/obfusk/m.git obfusk-m
 $ cd obfusk-m
 $ dpkg-buildpackage
 $ sudo dpkg -i ../mmm_*_all.deb
+```
+
+### NixOS
+
+```bash
+$ cd /some/convenient/dir
+$ git clone https://github.com/obfusk/m.git obfusk-m
+$ cd obfusk-m
+$ nix-env -i -f .
+```
+
+or even:
+
+```bash
+$ nix-env -i -f https://github.com/obfusk/m/archive/master.tar.gz
 ```
 
 ## Configuration File
